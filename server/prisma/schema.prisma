@@ -1,0 +1,489 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  FACULTY
+  ADMINISTRATOR
+  CLUB_CORE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+enum AnnouncementPriority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum AnnouncementSource {
+  ADMINISTRATION
+  FACULTY
+  CLUB
+}
+
+enum EventCategory {
+  ACADEMIC
+  CLUB
+  SPORTS
+  WORKSHOP
+  COMPETITION
+  CAMPUS
+}
+
+enum DeadlineCategory {
+  ASSIGNMENT
+  APPLICATION
+  SCHOLARSHIP
+  REGISTRATION
+  COMPETITION
+  ACADEMIC
+}
+
+enum IssueCategory {
+  ELECTRICAL
+  PLUMBING
+  CLASSROOM
+  CLEANLINESS
+  WIFI
+  INFRASTRUCTURE
+  OTHER
+}
+
+enum IssueStatus {
+  REPORTED
+  UNDER_REVIEW
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum OpportunityCategory {
+  INTERNSHIP
+  HACKATHON
+  COMPETITION
+  WORKSHOP
+  RESEARCH
+  FELLOWSHIP
+}
+
+enum ApplicationStatus {
+  SAVED
+  APPLIED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  role         Role
+  phone        String?
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  studentProfile      StudentProfile?
+  mentorProfile       MentorProfile?
+  otpChallenges       OtpChallenge[]
+  sessions            Session[]
+  attendanceRecords   AttendanceRecord[]
+  attendanceSettings  AttendanceSettings?
+  attendanceAlerts    AttendanceAlert[]
+  reportedIssues      CampusIssue[]        @relation("ReportedIssues")
+  clubMemberships     ClubMembership[]
+  announcements       Announcement[]       @relation("CreatedAnnouncements")
+  events              Event[]              @relation("OrganizedEvents")
+  assignedSubjects    Subject[]            @relation("FacultySubjects")
+  savedOpportunities  SavedOpportunity[]
+  savedScholarships   SavedScholarship[]
+  scholarshipAwards   ScholarshipRecipient[]
+  sentMentorContacts  MentorContactLog[]   @relation("StudentContacts")
+  receivedContacts    MentorContactLog[]   @relation("MentorContacts")
+  lostItems           LostItem[]
+}
+
+model StudentProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collegeId       String   @unique
+  program         String   // e.g. "B.Tech"
+  branch          String   // e.g. "Computer Science & Engineering"
+  semester        Int      // 1 to 8
+  yearOfStudy     Int      // 1, 2, 3, 4
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Enrollment {
+  id           String   @id @default(uuid())
+  studentEmail String   @unique
+  program      String
+  branch       String
+  semester     Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([program, branch, semester])
+}
+
+model MentorProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isAvailable     Boolean  @default(false)
+  bio             String?
+  interests       String[] // e.g. ["Machine Learning", "System Design", "Cloud"]
+  shareEmail      Boolean  @default(true)
+  sharePhone      Boolean  @default(false)
+  shareLinkedIn   Boolean  @default(false)
+  linkedInUrl     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model MentorContactLog {
+  id          String   @id @default(uuid())
+  mentorId    String
+  studentId   String
+  message     String
+  sentAt      DateTime @default(now())
+
+  mentor      User     @relation("MentorContacts", fields: [mentorId], references: [id], onDelete: Cascade)
+  student     User     @relation("StudentContacts", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, sentAt])
+}
+
+model OtpChallenge {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  otpHash    String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  ipAddress  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Subject {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  program     String
+  branch      String
+  semester    Int
+  credits     Int      @default(3)
+  facultyId   String?
+  facultyUser User?    @relation("FacultySubjects", fields: [facultyId], references: [id], onDelete: SetNull)
+  facultyName String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  timetableSlots    TimetableSlot[]
+  attendanceRecords AttendanceRecord[]
+  attendanceAlerts  AttendanceAlert[]
+
+  @@index([program, branch, semester])
+}
+
+model TimetableSlot {
+  id        String   @id @default(uuid())
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  dayOfWeek Int      // 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday, 7=Sunday
+  startTime String   // "09:00"
+  endTime   String   // "10:00"
+  room      String   // "LH-101"
+  createdAt DateTime @default(now())
+
+  @@index([subjectId, dayOfWeek])
+}
+
+model AttendanceRecord {
+  id        String           @id @default(uuid())
+  studentId String
+  student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  date      DateTime         @db.Date
+  status    AttendanceStatus
+  markedAt  DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([studentId, subjectId, date])
+  @@index([studentId, subjectId])
+  @@index([date])
+}
+
+model AttendanceSettings {
+  id             String   @id @default(uuid())
+  studentId      String   @unique
+  student        User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  alertThreshold Float    @default(80.0)
+  updatedAt      DateTime @updatedAt
+}
+
+model AttendanceAlert {
+  id                String    @id @default(uuid())
+  studentId         String
+  student           User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId         String
+  subject           Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  threshold         Float     @default(80.0)
+  percentageAtAlert Float
+  sentAt            DateTime  @default(now())
+  dismissedAt       DateTime?
+  resolvedAt        DateTime?
+
+  @@index([studentId, subjectId])
+}
+
+model Announcement {
+  id                 String               @id @default(uuid())
+  title              String
+  content            String
+  authorId           String
+  author             User                 @relation("CreatedAnnouncements", fields: [authorId], references: [id], onDelete: Cascade)
+  authorRole         Role
+  sourceCategory     AnnouncementSource
+  isVerifiedByAdmin  Boolean              @default(false)
+  targetDepartment   String?              // e.g. "Computer Science & Engineering" or null for all
+  targetSemester     Int?                 // e.g. 3 or null for all
+  priority           AnnouncementPriority @default(NORMAL)
+  expiresAt          DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([priority, createdAt])
+}
+
+model Event {
+  id          String        @id @default(uuid())
+  title       String
+  description String
+  category    EventCategory
+  location    String
+  startTime   DateTime
+  endTime     DateTime
+  organizerId String
+  organizer   User          @relation("OrganizedEvents", fields: [organizerId], references: [id], onDelete: Cascade)
+  clubId      String?
+  club        Club?         @relation(fields: [clubId], references: [id], onDelete: SetNull)
+  isPublic    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([startTime])
+}
+
+model Deadline {
+  id          String           @id @default(uuid())
+  title       String
+  description String
+  dueDate     DateTime
+  category    DeadlineCategory
+  source      String           // e.g. "Department of CSE", "Examination Cell"
+  department  String?
+  semester    Int?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([dueDate])
+}
+
+model Library {
+  id          String   @id @default("campus-main-library")
+  name        String   @default("Central University Library")
+  capacity    Int      @default(200)
+  occupied    Int      @default(0)
+  lastUpdated DateTime @default(now())
+  updatedById String?
+}
+
+model LostItem {
+  id            String    @id @default(uuid())
+  title         String
+  description   String
+  locationLost  String
+  dateLost      DateTime
+  timeLost      String?
+  contactEmail  String
+  contactPhone  String?
+  imageUrl      String?
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isResolved    Boolean   @default(false)
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([isResolved, createdAt])
+}
+
+model FoundItem {
+  id              String   @id @default(uuid())
+  title           String
+  description     String
+  locationFound   String
+  dateFound       DateTime
+  heldAtLocation  String
+  contactEmail    String
+  imageUrl        String?
+  createdAt       DateTime @default(now())
+}
+
+model CampusIssue {
+  id                   String        @id @default(uuid())
+  issueCode            String        @unique // e.g. "ISS-2026-0001"
+  title                String
+  description          String
+  location             String
+  category             IssueCategory
+  aiSuggestedCategory  String?
+  aiSuggestedPriority  String?
+  status               IssueStatus   @default(REPORTED)
+  reporterId           String
+  reporter             User          @relation("ReportedIssues", fields: [reporterId], references: [id], onDelete: Cascade)
+  imageUrl             String?
+  adminNotes           String?
+  resolvedAt           DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([status, createdAt])
+  @@index([reporterId])
+}
+
+model Opportunity {
+  id              String              @id @default(uuid())
+  name            String
+  organization    String
+  description     String
+  category        OpportunityCategory
+  eligibility     String
+  deadline        DateTime
+  applicationLink String
+  branch          String?
+  year            Int?
+  stipend         String?
+  postedDate      DateTime            @default(now())
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  savedBy         SavedOpportunity[]
+
+  @@index([deadline])
+}
+
+model SavedOpportunity {
+  id            String            @id @default(uuid())
+  studentId     String
+  student       User              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  opportunityId String
+  opportunity   Opportunity       @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  status        ApplicationStatus @default(SAVED)
+  createdAt     DateTime          @default(now())
+
+  @@unique([studentId, opportunityId])
+}
+
+model Scholarship {
+  id                 String                 @id @default(uuid())
+  name               String
+  provider           String
+  amount             String
+  deadline           DateTime
+  description        String
+  eligibility        String
+  branch             String?
+  applicationLink    String
+  isVerifiedByAdmin  Boolean                @default(false)
+  isDeleted          Boolean                @default(false) // Soft-delete
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  savedBy            SavedScholarship[]
+  recipients         ScholarshipRecipient[]
+
+  @@index([isDeleted, deadline])
+}
+
+model SavedScholarship {
+  id            String            @id @default(uuid())
+  studentId     String
+  student       User              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  scholarshipId String
+  scholarship   Scholarship       @relation(fields: [scholarshipId], references: [id], onDelete: Cascade)
+  status        ApplicationStatus @default(SAVED)
+  createdAt     DateTime          @default(now())
+
+  @@unique([studentId, scholarshipId])
+}
+
+model ScholarshipRecipient {
+  id                  String      @id @default(uuid())
+  scholarshipId       String
+  scholarship         Scholarship @relation(fields: [scholarshipId], references: [id], onDelete: Cascade)
+  studentId           String
+  student             User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  yearAwarded         Int
+  optedIntoMentoring  Boolean     @default(false)
+  createdAt           DateTime    @default(now())
+
+  @@unique([scholarshipId, studentId])
+}
+
+model Club {
+  id           String           @id @default(uuid())
+  name         String           @unique
+  slug         String           @unique
+  description  String
+  category     String           // e.g. "Technical", "Cultural", "Robotics"
+  logoUrl      String?
+  contactEmail String
+  websiteUrl   String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  members      ClubMembership[]
+  events       Event[]
+}
+
+model ClubMembership {
+  id       String   @id @default(uuid())
+  clubId   String
+  club     Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String   @default("CORE_MEMBER") // "LEAD", "CORE_MEMBER", "MEMBER"
+  joinedAt DateTime @default(now())
+
+  @@unique([clubId, userId])
+}

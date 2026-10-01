@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-campus-bg: #FBFBF9;
+  --color-campus-surface: #F4F4F0;
+  --color-campus-card: #FFFFFF;
+  --color-campus-border: #E8E8E2;
+  --color-campus-text: #1A2421;
+  --color-campus-jade: #1B4D3E;
+  --color-campus-sage: #D5DFD4;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #FBFBF9;
+  color: #1A2421;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom subtle scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D5DFD4;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B8C8B7;
+}
+
+/* Focus rings with jade green */
+*:focus-visible {
+  outline: 2px solid #1B4D3E;
+  outline-offset: 2px;
+}
