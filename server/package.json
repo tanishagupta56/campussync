@@ -4,6 +4,8 @@
   "description": "CampusSync Backend REST API with Express, Prisma, and PostgreSQL",
   "main": "dist/index.js",
   "scripts": {
+    "db:start": "node start-db.js",
+    "db:stop": "node stop-db.js",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
