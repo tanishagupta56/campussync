@@ -151,9 +151,21 @@ export const ClubLoginPage: React.FC = () => {
             </form>
           ) : (
             <form onSubmit={handleOtpSubmit} className="space-y-4">
-              <div className="p-3 bg-campus-jade-50 border border-campus-jade-200 rounded-lg text-xs text-campus-jade-900">
-                Code sent to <strong>{challenge.maskedEmail}</strong>. Check server console in dev.
-              </div>
+              {challenge.devOtp ? (
+                <div className="p-3 bg-amber-50 border-2 border-amber-300 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full">Demo Mode</span>
+                  </div>
+                  <div className="flex items-baseline space-x-3">
+                    <span className="text-xs text-amber-800">Code:</span>
+                    <span className="font-mono text-xl font-bold tracking-[0.4em] text-amber-900 select-all">{challenge.devOtp}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-campus-jade-50 border border-campus-jade-200 rounded-lg text-xs text-campus-jade-900">
+                  Code sent to <strong>{challenge.maskedEmail}</strong>. Check server console in dev.
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-campus-text mb-1.5">Enter 6-Digit Code</label>

@@ -303,11 +303,25 @@ export const LoginPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Development Console Note */}
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                <div className="font-semibold mb-0.5">Development Testing Mode:</div>
-                Check your server terminal log — the 6-digit OTP is printed there automatically.
-              </div>
+              {/* Development OTP Banner — shown only when DEV_SHOW_OTP=true on the server */}
+              {challenge.devOtp ? (
+                <div className="p-3.5 bg-amber-50 border-2 border-amber-300 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full">Demo Mode</span>
+                    <span className="text-[10px] text-amber-600">DEV_SHOW_OTP is active</span>
+                  </div>
+                  <div className="flex items-baseline space-x-3">
+                    <span className="text-xs text-amber-800">Your code:</span>
+                    <span className="font-mono text-2xl font-bold tracking-[0.4em] text-amber-900 select-all">{challenge.devOtp}</span>
+                  </div>
+                  <p className="text-[10px] text-amber-600 mt-1">This banner is hidden automatically in production.</p>
+                </div>
+              ) : (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                  <div className="font-semibold mb-0.5">Development Testing Mode:</div>
+                  Check your server terminal log — the 6-digit OTP is printed there automatically.
+                </div>
+              )}
 
               <div>
                 <label htmlFor="otp" className="block text-xs font-semibold text-campus-text mb-2">

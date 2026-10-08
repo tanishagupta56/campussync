@@ -36,4 +36,6 @@ export interface LoginChallenge {
   maskedEmail: string;
   expiresAt: string;
   message: string;
+  /** Only present in dev when DEV_SHOW_OTP=true — never in production */
+  devOtp?: string;
 }

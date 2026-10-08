@@ -113,6 +113,8 @@ export class AuthService {
       maskedEmail,
       expiresAt: challenge.expiresAt,
       message: `A 6-digit verification code has been sent to ${maskedEmail}.`,
+      // Only included in development when DEV_SHOW_OTP=true — never in production
+      ...(config.devShowOtp ? { devOtp: plainOtp } : {}),
     };
   }
 
