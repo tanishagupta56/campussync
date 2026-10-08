@@ -4,16 +4,36 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
+import { StudentLayout } from './components/layout/StudentLayout';
 
 // Auth Pages
 import { LoginPage } from './pages/auth/LoginPage';
 import { ClubLoginPage } from './pages/auth/ClubLoginPage';
 
-// Dashboard Pages
+// Student Pages
 import { TodayPage } from './pages/student/TodayPage';
+import { AnnouncementsPage } from './pages/student/AnnouncementsPage';
+import { PlaceholderPage } from './pages/student/PlaceholderPage';
+
+// Other Dashboards
 import { FacultyDashboard } from './pages/faculty/FacultyDashboard';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { ClubDashboard } from './pages/club/ClubDashboard';
+
+// Lucide icons for placeholders
+import {
+  Calendar,
+  Clock,
+  CalendarCheck,
+  Book,
+  Search,
+  Flag,
+  Zap,
+  Award,
+  Users,
+  Link as LinkIcon,
+  Sparkles,
+} from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,12 +55,14 @@ export const App: React.FC = () => {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/club-login" element={<ClubLoginPage />} />
 
-              {/* Student Role Routes */}
+              {/* Student Role Routes Wrapped in StudentLayout */}
               <Route
                 path="/"
                 element={
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
-                    <TodayPage />
+                    <StudentLayout>
+                      <TodayPage />
+                    </StudentLayout>
                   </RoleProtectedRoute>
                 }
               />
@@ -48,7 +70,129 @@ export const App: React.FC = () => {
                 path="/today"
                 element={
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
-                    <TodayPage />
+                    <StudentLayout>
+                      <TodayPage />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/announcements"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <AnnouncementsPage />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/calendar"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Campus Calendar" icon={Calendar} description="View academic timetables, club workshops, cultural festivals, and exam schedules." />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/deadlines"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Deadlines Tracker" icon={Clock} description="Track assignment submissions, scholarship applications, and registration deadlines with urgency countdowns." />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/attendance"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Attendance Tracker" icon={CalendarCheck} phase="Phase 4" description="Self-reported 7-day attendance marking with automatic 80% threshold alerts." />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/library"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Central Library Tracker" icon={Book} description="Real-time capacity monitor and interactive 3D seat occupancy visualizer." />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/lost-found"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Lost & Found Noticeboard" icon={Search} description="Active campus notices with instant item submission and 30-day automatic expiration." />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/campus-issues"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Campus Issues & Facility Reports" icon={Flag} description="Report Wi-Fi, classroom, and electrical faults with transparent admin resolution timelines." />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/opportunities"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Opportunities & Fellowships" icon={Zap} description="Verified internships, research fellowships, and hackathons tailored by year and department." />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/scholarships"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Scholarships & Grants" icon={Award} description="Institutional and merit scholarships linked with available senior mentors." />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/clubs"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Student Clubs & Societies" icon={Users} description="Explore technical and cultural societies, team recruitment notices, and upcoming meets." />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/connect"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Connect: Senior Mentorship" icon={LinkIcon} phase="Phase 5" description="Browse opted-in 2nd-4th year mentors by interest, branch, and scholarship receipt." />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/ai"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="CampusSync AI" icon={Sparkles} phase="Phase 5" description="Conversational campus assistant grounded in live university database records." />
+                    </StudentLayout>
                   </RoleProtectedRoute>
                 }
               />
