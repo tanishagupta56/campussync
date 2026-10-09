@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PrismaClient, Role } from '@prisma/client';
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRole } from '../middlewares/role.middleware';
+import dayjs from 'dayjs';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -35,7 +36,7 @@ router.get('/announcements', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/announcements (Admin/Faculty/Club)
+// POST /api/announcements
 router.post('/announcements', requireAuth, requireRole(Role.ADMINISTRATOR, Role.FACULTY, Role.CLUB_CORE), async (req, res, next) => {
   try {
     const { title, content, priority, targetDepartment } = req.body;
@@ -60,7 +61,7 @@ router.post('/announcements', requireAuth, requireRole(Role.ADMINISTRATOR, Role.
   }
 });
 
-// DELETE /api/announcements/:id (Admin only)
+// DELETE /api/announcements/:id
 router.delete('/announcements/:id', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
   try {
     await prisma.announcement.delete({ where: { id: req.params.id } });
@@ -91,7 +92,7 @@ router.get('/events', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/events (Admin/Faculty/Club)
+// POST /api/events
 router.post('/events', requireAuth, requireRole(Role.ADMINISTRATOR, Role.FACULTY, Role.CLUB_CORE), async (req, res, next) => {
   try {
     const { title, description, category, location, startTime, endTime } = req.body;
@@ -130,7 +131,7 @@ router.get('/deadlines', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/deadlines (Admin/Faculty)
+// POST /api/deadlines
 router.post('/deadlines', requireAuth, requireRole(Role.ADMINISTRATOR, Role.FACULTY), async (req, res, next) => {
   try {
     const { title, description, dueDate, category, source } = req.body;
@@ -166,8 +167,8 @@ router.get('/library', requireAuth, async (req, res, next) => {
   }
 });
 
-// PATCH /api/library (Admin only: +1/-1 or delta or set, capped between 0 and capacity)
-router.patch('/api/library', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
+// PATCH /api/library
+router.patch('/library', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
   try {
     const { delta, capacity: newCapacity } = req.body;
     let library = await prisma.library.findFirst();
@@ -196,6 +197,182 @@ router.patch('/api/library', requireAuth, requireRole(Role.ADMINISTRATOR), async
     const available = Math.max(0, updated.capacity - updated.occupied);
     const occupancyPercentage = Math.round((updated.occupied / updated.capacity) * 100);
     res.json({ success: true, data: { ...updated, available, occupancyPercentage } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==================== LOST & FOUND ====================
+// GET /api/lost-found (active items, not resolved, <= 30 days old calculated)
+router.get('/lost-found', requireAuth, async (req, res, next) => {
+  try {
+    const thirtyDaysAgo = dayjs().subtract(30, 'day').toDate();
+    const items = await prisma.lostItem.findMany({
+      where: {
+        isResolved: false,
+        createdAt: { gte: thirtyDaysAgo },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: { select: { id: true, fullName: true, email: true } },
+      },
+    });
+    res.json({ success: true, data: items });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/lost-found
+router.post('/lost-found', requireAuth, async (req, res, next) => {
+  try {
+    const { title, description, locationLost, dateLost, timeLost, contactEmail, contactPhone, imageUrl } = req.body;
+    const item = await prisma.lostItem.create({
+      data: {
+        title,
+        description,
+        locationLost,
+        dateLost: new Date(dateLost),
+        timeLost: timeLost || null,
+        contactEmail: contactEmail || req.user!.email,
+        contactPhone: contactPhone || null,
+        imageUrl: imageUrl || null,
+        userId: req.user!.id,
+        isResolved: false,
+      },
+    });
+    res.json({ success: true, data: item });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/lost-found/:id/found (only owner or admin can mark found)
+router.patch('/lost-found/:id/found', requireAuth, async (req, res, next) => {
+  try {
+    const item = await prisma.lostItem.findUnique({ where: { id: req.params.id } });
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    if (item.userId !== req.user!.id && req.user!.role !== Role.ADMINISTRATOR) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Only post creator or administrator can mark item found.' });
+    }
+
+    const updated = await prisma.lostItem.update({
+      where: { id: req.params.id },
+      data: { isResolved: true, resolvedAt: new Date() },
+    });
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==================== CONNECT (MENTORS) ====================
+// GET /api/mentors
+router.get('/mentors', requireAuth, async (req, res, next) => {
+  try {
+    const { branch, interest } = req.query;
+
+    // Fetch current user's student profile for branch prioritization
+    const currentStudent = await prisma.studentProfile.findUnique({
+      where: { userId: req.user!.id },
+    });
+
+    const where: any = { isAvailable: true };
+    if (interest && typeof interest === 'string') {
+      where.interests = { has: interest };
+    }
+
+    const mentors = await prisma.mentorProfile.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
+            studentProfile: true,
+          },
+        },
+      },
+    });
+
+    // Sanitise according to privacy toggles & apply branch filter
+    let results = mentors
+      .filter((m) => {
+        if (branch && typeof branch === 'string' && branch !== 'ALL') {
+          return m.user.studentProfile?.branch === branch;
+        }
+        return true;
+      })
+      .map((m) => {
+        return {
+          id: m.id,
+          userId: m.userId,
+          fullName: m.user.fullName,
+          program: m.user.studentProfile?.program || 'B.Tech',
+          branch: m.user.studentProfile?.branch || 'Engineering',
+          yearOfStudy: m.user.studentProfile?.yearOfStudy || 3,
+          bio: m.bio,
+          interests: m.interests,
+          email: m.shareEmail ? m.user.email : null,
+          phone: m.sharePhone ? m.user.phone : null,
+          linkedInUrl: m.shareLinkedIn ? m.linkedInUrl : null,
+          isSameBranch: currentStudent ? m.user.studentProfile?.branch === currentStudent.branch : false,
+        };
+      });
+
+    // Sort: Same-branch first, then alphabetically
+    results.sort((a, b) => {
+      if (a.isSameBranch && !b.isSameBranch) return -1;
+      if (!a.isSameBranch && b.isSameBranch) return 1;
+      return a.fullName.localeCompare(b.fullName);
+    });
+
+    res.json({ success: true, data: results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/mentors/availability (Year 2+ check on server)
+router.patch('/mentors/availability', requireAuth, async (req, res, next) => {
+  try {
+    const student = await prisma.studentProfile.findUnique({ where: { userId: req.user!.id } });
+    if (!student || student.yearOfStudy < 2) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Only students in Year 2 or above are eligible to mentor.',
+      });
+    }
+
+    const { isAvailable, bio, interests, shareEmail, sharePhone, shareLinkedIn, linkedInUrl } = req.body;
+
+    const mentor = await prisma.mentorProfile.upsert({
+      where: { userId: req.user!.id },
+      create: {
+        userId: req.user!.id,
+        isAvailable: Boolean(isAvailable),
+        bio: bio || 'Available to guide fellow students.',
+        interests: Array.isArray(interests) ? interests : ['General Academics', 'Career Advice'],
+        shareEmail: shareEmail ?? true,
+        sharePhone: sharePhone ?? false,
+        shareLinkedIn: shareLinkedIn ?? false,
+        linkedInUrl: linkedInUrl || null,
+      },
+      update: {
+        ...(typeof isAvailable === 'boolean' ? { isAvailable } : {}),
+        ...(bio !== undefined ? { bio } : {}),
+        ...(Array.isArray(interests) ? { interests } : {}),
+        ...(typeof shareEmail === 'boolean' ? { shareEmail } : {}),
+        ...(typeof sharePhone === 'boolean' ? { sharePhone } : {}),
+        ...(typeof shareLinkedIn === 'boolean' ? { shareLinkedIn } : {}),
+        ...(linkedInUrl !== undefined ? { linkedInUrl } : {}),
+      },
+    });
+
+    res.json({ success: true, data: mentor });
   } catch (err) {
     next(err);
   }

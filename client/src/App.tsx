@@ -16,6 +16,8 @@ import { AnnouncementsPage } from './pages/student/AnnouncementsPage';
 import { CalendarPage } from './pages/student/CalendarPage';
 import { DeadlinesPage } from './pages/student/DeadlinesPage';
 import { LibraryPage } from './pages/student/LibraryPage';
+import { LostFoundPage } from './pages/student/LostFoundPage';
+import { ConnectPage } from './pages/student/ConnectPage';
 import { PlaceholderPage } from './pages/student/PlaceholderPage';
 
 // Other Dashboards
@@ -26,12 +28,10 @@ import { ClubDashboard } from './pages/club/ClubDashboard';
 // Lucide icons for placeholders
 import {
   CalendarCheck,
-  Search,
   Flag,
   Zap,
   Award,
   Users,
-  Link as LinkIcon,
   Sparkles,
 } from 'lucide-react';
 
@@ -55,7 +55,7 @@ export const App: React.FC = () => {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/club-login" element={<ClubLoginPage />} />
 
-              {/* Student Role Routes Wrapped in StudentLayout */}
+              {/* Student Role Routes */}
               <Route
                 path="/"
                 element={
@@ -117,21 +117,33 @@ export const App: React.FC = () => {
                 }
               />
               <Route
-                path="/attendance"
+                path="/lost-found"
                 element={
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
                     <StudentLayout>
-                      <PlaceholderPage title="Attendance Tracker" icon={CalendarCheck} phase="Phase 4" description="Self-reported 7-day attendance marking with automatic 80% threshold alerts." />
+                      <LostFoundPage />
                     </StudentLayout>
                   </RoleProtectedRoute>
                 }
               />
               <Route
-                path="/lost-found"
+                path="/connect"
                 element={
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
                     <StudentLayout>
-                      <PlaceholderPage title="Lost & Found Noticeboard" icon={Search} description="Active campus notices with instant item submission and 30-day automatic expiration." />
+                      <ConnectPage />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+
+              {/* Placeholders */}
+              <Route
+                path="/attendance"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <PlaceholderPage title="Attendance Tracker" icon={CalendarCheck} phase="Phase 4" description="Self-reported 7-day attendance marking with automatic 80% threshold alerts." />
                     </StudentLayout>
                   </RoleProtectedRoute>
                 }
@@ -172,16 +184,6 @@ export const App: React.FC = () => {
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
                     <StudentLayout>
                       <PlaceholderPage title="Student Clubs & Societies" icon={Users} description="Explore technical and cultural societies, team recruitment notices, and upcoming meets." />
-                    </StudentLayout>
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="/connect"
-                element={
-                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
-                    <StudentLayout>
-                      <PlaceholderPage title="Connect: Senior Mentorship" icon={LinkIcon} phase="Phase 5" description="Browse opted-in 2nd-4th year mentors by interest, branch, and scholarship receipt." />
                     </StudentLayout>
                   </RoleProtectedRoute>
                 }
