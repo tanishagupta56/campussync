@@ -13,6 +13,9 @@ import { ClubLoginPage } from './pages/auth/ClubLoginPage';
 // Student Pages
 import { TodayPage } from './pages/student/TodayPage';
 import { AnnouncementsPage } from './pages/student/AnnouncementsPage';
+import { CalendarPage } from './pages/student/CalendarPage';
+import { DeadlinesPage } from './pages/student/DeadlinesPage';
+import { LibraryPage } from './pages/student/LibraryPage';
 import { PlaceholderPage } from './pages/student/PlaceholderPage';
 
 // Other Dashboards
@@ -22,10 +25,7 @@ import { ClubDashboard } from './pages/club/ClubDashboard';
 
 // Lucide icons for placeholders
 import {
-  Calendar,
-  Clock,
   CalendarCheck,
-  Book,
   Search,
   Flag,
   Zap,
@@ -91,7 +91,7 @@ export const App: React.FC = () => {
                 element={
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
                     <StudentLayout>
-                      <PlaceholderPage title="Campus Calendar" icon={Calendar} description="View academic timetables, club workshops, cultural festivals, and exam schedules." />
+                      <CalendarPage />
                     </StudentLayout>
                   </RoleProtectedRoute>
                 }
@@ -101,7 +101,17 @@ export const App: React.FC = () => {
                 element={
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
                     <StudentLayout>
-                      <PlaceholderPage title="Deadlines Tracker" icon={Clock} description="Track assignment submissions, scholarship applications, and registration deadlines with urgency countdowns." />
+                      <DeadlinesPage />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/library"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <LibraryPage />
                     </StudentLayout>
                   </RoleProtectedRoute>
                 }
@@ -112,16 +122,6 @@ export const App: React.FC = () => {
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
                     <StudentLayout>
                       <PlaceholderPage title="Attendance Tracker" icon={CalendarCheck} phase="Phase 4" description="Self-reported 7-day attendance marking with automatic 80% threshold alerts." />
-                    </StudentLayout>
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="/library"
-                element={
-                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
-                    <StudentLayout>
-                      <PlaceholderPage title="Central Library Tracker" icon={Book} description="Real-time capacity monitor and interactive 3D seat occupancy visualizer." />
                     </StudentLayout>
                   </RoleProtectedRoute>
                 }
