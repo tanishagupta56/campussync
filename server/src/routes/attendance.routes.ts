@@ -115,7 +115,7 @@ router.get('/attendance/today', requireAuth, async (req, res, next) => {
     }
 
     // Day of week: 1 = Monday ... 7 = Sunday
-    let dayOfWeek = targetDate.day();
+    let dayOfWeek: number = targetDate.day();
     if (dayOfWeek === 0) dayOfWeek = 7;
 
     const slots = await prisma.timetableSlot.findMany({

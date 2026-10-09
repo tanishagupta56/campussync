@@ -1,3 +1,4 @@
+// @ts-ignore
 import { EmbeddedPostgres } from 'embedded-postgres';
 import { Client } from 'pg';
 import path from 'path';
