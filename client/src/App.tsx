@@ -18,6 +18,7 @@ import { DeadlinesPage } from './pages/student/DeadlinesPage';
 import { LibraryPage } from './pages/student/LibraryPage';
 import { LostFoundPage } from './pages/student/LostFoundPage';
 import { ConnectPage } from './pages/student/ConnectPage';
+import { AttendancePage } from './pages/student/AttendancePage';
 import { PlaceholderPage } from './pages/student/PlaceholderPage';
 
 // Other Dashboards
@@ -25,9 +26,8 @@ import { FacultyDashboard } from './pages/faculty/FacultyDashboard';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { ClubDashboard } from './pages/club/ClubDashboard';
 
-// Lucide icons for placeholders
+// Lucide icons for remaining placeholders
 import {
-  CalendarCheck,
   Flag,
   Zap,
   Award,
@@ -136,18 +136,18 @@ export const App: React.FC = () => {
                   </RoleProtectedRoute>
                 }
               />
-
-              {/* Placeholders */}
               <Route
                 path="/attendance"
                 element={
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
                     <StudentLayout>
-                      <PlaceholderPage title="Attendance Tracker" icon={CalendarCheck} phase="Phase 4" description="Self-reported 7-day attendance marking with automatic 80% threshold alerts." />
+                      <AttendancePage />
                     </StudentLayout>
                   </RoleProtectedRoute>
                 }
               />
+
+              {/* Remaining Placeholders */}
               <Route
                 path="/campus-issues"
                 element={

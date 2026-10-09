@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { config } from './config/env';
 import authRoutes from './routes/auth.routes';
 import campusRoutes from './routes/campus.routes';
+import attendanceRoutes from './routes/attendance.routes';
 import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
@@ -42,6 +43,7 @@ app.get('/api/health', (req, res) => {
 // Mount Routes
 app.use('/api/auth', authRoutes);
 app.use('/api', campusRoutes);
+app.use('/api', attendanceRoutes);
 
 // 404 Handler for undefined API routes
 app.use('/api/*', (req, res) => {
