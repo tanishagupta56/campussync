@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   Home,
@@ -9,24 +9,20 @@ import {
   CalendarCheck,
   Book,
   Search,
-  Flag,
-  Zap,
-  Award,
-  Users,
   Link as LinkIcon,
-  Sparkles,
   LogOut,
   Menu,
   X,
 } from 'lucide-react';
 
-interface NavItem {
+export interface NavFeature {
   name: string;
   path: string;
   icon: React.ComponentType<{ className?: string }>;
 }
 
-const navItems: NavItem[] = [
+// Built features only — adding a future feature requires only adding one entry here
+export const studentNavFeatures: NavFeature[] = [
   { name: 'Today', path: '/today', icon: Home },
   { name: 'Announcements', path: '/announcements', icon: Bell },
   { name: 'Calendar', path: '/calendar', icon: Calendar },
@@ -34,22 +30,16 @@ const navItems: NavItem[] = [
   { name: 'Attendance', path: '/attendance', icon: CalendarCheck },
   { name: 'Library', path: '/library', icon: Book },
   { name: 'Lost & Found', path: '/lost-found', icon: Search },
-  { name: 'Campus Issues', path: '/campus-issues', icon: Flag },
-  { name: 'Opportunities', path: '/opportunities', icon: Zap },
-  { name: 'Scholarships', path: '/scholarships', icon: Award },
-  { name: 'Clubs', path: '/clubs', icon: Users },
   { name: 'Connect', path: '/connect', icon: LinkIcon },
-  { name: 'CampusSync AI', path: '/ai', icon: Sparkles },
 ];
 
 export const StudentLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const NavLinks = ({ onClick }: { onClick?: () => void }) => (
     <div className="space-y-1">
-      {navItems.map((item) => {
+      {studentNavFeatures.map((item) => {
         const Icon = item.icon;
         return (
           <NavLink
@@ -128,7 +118,6 @@ export const StudentLayout: React.FC<{ children: React.ReactNode }> = ({ childre
       {/* Desktop Persistent Flat Sidebar */}
       <aside className="hidden md:flex flex-col w-56 bg-campus-card border-r border-campus-border min-h-screen sticky top-0 p-3.5 justify-between">
         <div className="overflow-y-auto pr-1">
-          {/* Logo / University Header */}
           <div className="flex items-center space-x-2.5 px-2.5 py-3 mb-3 border-b border-campus-borderSubtle">
             <div className="w-7 h-7 rounded-lg bg-campus-jade-700 flex items-center justify-center text-white font-bold text-xs">
               CS
@@ -142,7 +131,6 @@ export const StudentLayout: React.FC<{ children: React.ReactNode }> = ({ childre
           <NavLinks />
         </div>
 
-        {/* User Card at bottom */}
         <div className="pt-3 border-t border-campus-borderSubtle px-2">
           <div className="text-xs font-semibold text-campus-text truncate">{user?.fullName}</div>
           <div className="text-[11px] text-campus-textDim truncate">{user?.studentProfile?.branch || user?.email}</div>

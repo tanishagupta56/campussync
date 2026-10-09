@@ -1,33 +1,9 @@
-# Dependencies
 node_modules/
-.pnpm-store/
-
-# Build artifacts
+.pgdata/
 dist/
-build/
-.cache/
-
-# Environment files
 .env
 .env.local
-.env.*.local
-!.env.example
-
-# Database & runtime
-*.sqlite
-*.sqlite3
-*.db
-.pgdata/
-postgres-data/
-
-# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-*.log
-
-# OS & Editor
 .DS_Store
-Thumbs.db
-.vscode/
-.idea/

@@ -2,6 +2,8 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import path from 'path';
+import fs from 'fs';
 import { config } from './config/env';
 import authRoutes from './routes/auth.routes';
 import campusRoutes from './routes/campus.routes';
@@ -10,18 +12,16 @@ import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
 
-// Security Headers with Helmet
 app.use(
   helmet({
-    contentSecurityPolicy: false, // Allows flexible assets and Three.js canvas in dev
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
   })
 );
 
-// CORS configuration for React frontend
 app.use(
   cors({
-    origin: [config.clientUrl, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: config.isProduction ? true : [config.clientUrl, 'http://localhost:5173', 'http://127.0.0.1:5173'],
     credentials: true,
   })
 );
@@ -32,20 +32,27 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health Check
 app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    service: 'CampusSync Backend API',
-    timestamp: new Date().toISOString(),
-    timezone: config.defaultTimezone,
-  });
+  res.status(200).json({ ok: true });
 });
 
-// Mount Routes
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api', campusRoutes);
 app.use('/api', attendanceRoutes);
 
-// 404 Handler for undefined API routes
+// In production, serve Vite client/dist and fallback to index.html for non-API routes
+if (config.isProduction) {
+  const clientDistPath = path.resolve(__dirname, '../../client/dist');
+  if (fs.existsSync(clientDistPath)) {
+    app.use(express.static(clientDistPath));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) return next();
+      res.sendFile(path.join(clientDistPath, 'index.html'));
+    });
+  }
+}
+
+// 404 Handler for unhandled API calls
 app.use('/api/*', (req, res) => {
   res.status(404).json({
     error: 'NotFound',
@@ -53,12 +60,10 @@ app.use('/api/*', (req, res) => {
   });
 });
 
-// Centralized Secure Error Handler
 app.use(errorHandler);
 
 const server = app.listen(config.port, () => {
-  console.log(`[CampusSync Server] Running on http://localhost:${config.port}`);
-  console.log(`[CampusSync Server] Environment: ${config.nodeEnv}`);
+  console.log(`[CampusSync Server] Running on port ${config.port} (env: ${config.nodeEnv})`);
 });
 
 export default app;

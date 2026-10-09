@@ -1,21 +1,27 @@
 {
-  "name": "campussync-root",
+  "name": "campussync",
   "version": "1.0.0",
   "private": true,
+  "description": "CampusSync - University Campus Management & Student Experience Platform",
   "scripts": {
-    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
-    "db:start": "cd server && npm run db:start",
-    "db:stop": "cd server && npm run db:stop",
-    "db:migrate": "cd server && npm run db:push",
-    "db:seed": "cd server && npm run db:seed",
-    "dev:server": "cd server && npm run dev",
-    "dev:client": "cd client && npm run dev",
-    "build:server": "cd server && npm run build",
-    "build:client": "cd client && npm run build",
-    "build": "npm run build:server && npm run build:client",
-    "start": "cd server && npm start"
+    "build": "npm run install:all && npm --prefix server run prisma:generate && npm --prefix client run build && npm --prefix server run build",
+    "start": "npm --prefix server run prisma:deploy && node server/dist/index.js",
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "seed:base": "npm --prefix server run seed:base",
+    "seed:demo": "npm --prefix server run seed:demo",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "db:start": "node server/start-db.js",
+    "db:stop": "node server/stop-db.js"
   },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
-  }
+  "keywords": [
+    "campus",
+    "education",
+    "university",
+    "management",
+    "react",
+    "express"
+  ],
+  "author": "CampusSync Team",
+  "license": "ISC"
 }

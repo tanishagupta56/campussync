@@ -10,7 +10,7 @@ import { StudentLayout } from './components/layout/StudentLayout';
 import { LoginPage } from './pages/auth/LoginPage';
 import { ClubLoginPage } from './pages/auth/ClubLoginPage';
 
-// Student Pages
+// Built Student Pages
 import { TodayPage } from './pages/student/TodayPage';
 import { AnnouncementsPage } from './pages/student/AnnouncementsPage';
 import { CalendarPage } from './pages/student/CalendarPage';
@@ -19,21 +19,9 @@ import { LibraryPage } from './pages/student/LibraryPage';
 import { LostFoundPage } from './pages/student/LostFoundPage';
 import { ConnectPage } from './pages/student/ConnectPage';
 import { AttendancePage } from './pages/student/AttendancePage';
-import { PlaceholderPage } from './pages/student/PlaceholderPage';
 
-// Other Dashboards
-import { FacultyDashboard } from './pages/faculty/FacultyDashboard';
+// Admin Dashboard
 import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { ClubDashboard } from './pages/club/ClubDashboard';
-
-// Lucide icons for remaining placeholders
-import {
-  Flag,
-  Zap,
-  Award,
-  Users,
-  Sparkles,
-} from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,11 +39,11 @@ export const App: React.FC = () => {
         <ToastProvider>
           <BrowserRouter>
             <Routes>
-              {/* Public Authentication Routes */}
+              {/* Public Auth */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/club-login" element={<ClubLoginPage />} />
 
-              {/* Student Role Routes */}
+              {/* Student Built Routes */}
               <Route
                 path="/"
                 element={
@@ -107,6 +95,16 @@ export const App: React.FC = () => {
                 }
               />
               <Route
+                path="/attendance"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <AttendancePage />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
                 path="/library"
                 element={
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
@@ -136,80 +134,8 @@ export const App: React.FC = () => {
                   </RoleProtectedRoute>
                 }
               />
-              <Route
-                path="/attendance"
-                element={
-                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
-                    <StudentLayout>
-                      <AttendancePage />
-                    </StudentLayout>
-                  </RoleProtectedRoute>
-                }
-              />
 
-              {/* Remaining Placeholders */}
-              <Route
-                path="/campus-issues"
-                element={
-                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
-                    <StudentLayout>
-                      <PlaceholderPage title="Campus Issues & Facility Reports" icon={Flag} description="Report Wi-Fi, classroom, and electrical faults with transparent admin resolution timelines." />
-                    </StudentLayout>
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="/opportunities"
-                element={
-                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
-                    <StudentLayout>
-                      <PlaceholderPage title="Opportunities & Fellowships" icon={Zap} description="Verified internships, research fellowships, and hackathons tailored by year and department." />
-                    </StudentLayout>
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="/scholarships"
-                element={
-                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
-                    <StudentLayout>
-                      <PlaceholderPage title="Scholarships & Grants" icon={Award} description="Institutional and merit scholarships linked with available senior mentors." />
-                    </StudentLayout>
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="/clubs"
-                element={
-                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
-                    <StudentLayout>
-                      <PlaceholderPage title="Student Clubs & Societies" icon={Users} description="Explore technical and cultural societies, team recruitment notices, and upcoming meets." />
-                    </StudentLayout>
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="/ai"
-                element={
-                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
-                    <StudentLayout>
-                      <PlaceholderPage title="CampusSync AI" icon={Sparkles} phase="Phase 5" description="Conversational campus assistant grounded in live university database records." />
-                    </StudentLayout>
-                  </RoleProtectedRoute>
-                }
-              />
-
-              {/* Faculty Role Routes */}
-              <Route
-                path="/faculty"
-                element={
-                  <RoleProtectedRoute allowedRoles={['FACULTY']}>
-                    <FacultyDashboard />
-                  </RoleProtectedRoute>
-                }
-              />
-
-              {/* Administrator Role Routes */}
+              {/* Administrator Route */}
               <Route
                 path="/admin"
                 element={
@@ -219,17 +145,7 @@ export const App: React.FC = () => {
                 }
               />
 
-              {/* Club Core Role Routes */}
-              <Route
-                path="/club/dashboard"
-                element={
-                  <RoleProtectedRoute allowedRoles={['CLUB_CORE']}>
-                    <ClubDashboard />
-                  </RoleProtectedRoute>
-                }
-              />
-
-              {/* Fallback */}
+              {/* Catch-all */}
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </BrowserRouter>
