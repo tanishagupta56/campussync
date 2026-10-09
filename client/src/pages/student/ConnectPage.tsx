@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../../lib/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Users, Mail, Phone, ExternalLink, Search, RefreshCw, CheckCircle2, ShieldCheck, Tag } from 'lucide-react';
+import { Users, Mail, Phone, ExternalLink, Search, RefreshCw, X, Copy, Check } from 'lucide-react';
 
 interface MentorItem {
   id: string;
@@ -27,8 +27,9 @@ export const ConnectPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [interestSearch, setInterestSearch] = useState('');
+  const [activeContactMentor, setActiveContactMentor] = useState<MentorItem | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  // Year 2+ Availability Toggle State
   const isEligibleYear = (user?.studentProfile?.yearOfStudy || 1) >= 2;
   const [isAvailable, setIsAvailable] = useState(user?.mentorProfile?.isAvailable || false);
   const [toggling, setToggling] = useState(false);
@@ -76,6 +77,13 @@ export const ConnectPage: React.FC = () => {
     }
   }
 
+  function copyEmailToClipboard(emailStr: string) {
+    navigator.clipboard.writeText(emailStr);
+    setCopied(true);
+    showToast('Mentor email copied to clipboard', 'success');
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   const branches = [
     'ALL',
     'Computer Science & Engineering',
@@ -94,7 +102,6 @@ export const ConnectPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Year 2+ Toggle Pill */}
         {isEligibleYear ? (
           <div className="flex items-center space-x-3 bg-campus-card border border-campus-border px-3.5 py-2 rounded-xl shadow-xs">
             <span className="text-xs font-semibold text-campus-text">Available as a mentor:</span>
@@ -117,9 +124,7 @@ export const ConnectPage: React.FC = () => {
         )}
       </div>
 
-      {/* Filter & Search Bar */}
       <div className="bg-campus-card border border-campus-border rounded-xl p-4 shadow-card flex flex-col md:flex-row items-center gap-3">
-        {/* Search by interest */}
         <div className="relative flex-1 w-full">
           <Search className="w-4 h-4 text-campus-textDim absolute left-3.5 top-3" />
           <input
@@ -131,7 +136,6 @@ export const ConnectPage: React.FC = () => {
           />
         </div>
 
-        {/* Branch Filter dropdown */}
         <select
           value={selectedBranch}
           onChange={(e) => setSelectedBranch(e.target.value)}
@@ -188,7 +192,6 @@ export const ConnectPage: React.FC = () => {
                   </p>
                 )}
 
-                {/* Interest Pills */}
                 {mentor.interests?.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-4">
                     {mentor.interests.map((tag) => (
@@ -203,14 +206,13 @@ export const ConnectPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Contact actions based only on what mentor chose to share */}
               <div className="pt-3 border-t border-campus-borderSubtle flex items-center justify-between text-xs">
                 <div className="flex items-center space-x-2">
                   {mentor.phone && (
                     <a
                       href={`tel:${mentor.phone}`}
                       className="p-1.5 bg-campus-surface rounded-lg text-campus-textMuted hover:text-campus-text"
-                      title={mentor.phone}
+                      title={`Call ${mentor.phone}`}
                     >
                       <Phone className="w-3.5 h-3.5" />
                     </a>
@@ -221,7 +223,7 @@ export const ConnectPage: React.FC = () => {
                       target="_blank"
                       rel="noreferrer"
                       className="p-1.5 bg-campus-surface rounded-lg text-campus-textMuted hover:text-campus-jade-700"
-                      title="LinkedIn profile"
+                      title="Open LinkedIn Profile"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
@@ -229,19 +231,105 @@ export const ConnectPage: React.FC = () => {
                 </div>
 
                 {mentor.email ? (
-                  <a
-                    href={`mailto:${mentor.email}?subject=CampusSync Mentorship Inquiry`}
+                  <button
+                    onClick={() => setActiveContactMentor(mentor)}
                     className="px-3 py-1.5 bg-campus-jade-700 text-white rounded-lg text-xs font-semibold hover:bg-campus-jade-800 flex items-center space-x-1.5 transition-colors"
                   >
                     <Mail className="w-3.5 h-3.5" />
                     <span>Contact Mentor</span>
-                  </a>
+                  </button>
                 ) : (
                   <span className="text-[11px] text-campus-textDim italic">Email hidden</span>
                 )}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Contact Mentor Modal */}
+      {activeContactMentor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-campus-card border border-campus-border rounded-xl max-w-md w-full p-6 shadow-elevated relative">
+            <button
+              onClick={() => setActiveContactMentor(null)}
+              className="absolute top-4 right-4 p-1 rounded-lg text-campus-textDim hover:text-campus-text hover:bg-campus-surface"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-2.5 mb-1">
+              <div className="p-2 bg-campus-jade-50 text-campus-jade-700 rounded-lg">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-campus-text">{activeContactMentor.fullName}</h2>
+                <p className="text-[11px] text-campus-textDim">
+                  Year {activeContactMentor.yearOfStudy} &bull; {activeContactMentor.branch}
+                </p>
+              </div>
+            </div>
+
+            <div className="my-4 p-3 bg-campus-surface rounded-lg border border-campus-borderSubtle space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-campus-textDim">College Email:</span>
+                <span className="font-semibold text-campus-text">{activeContactMentor.email}</span>
+              </div>
+              {activeContactMentor.phone && (
+                <div className="flex items-center justify-between">
+                  <span className="text-campus-textDim">Phone:</span>
+                  <a href={`tel:${activeContactMentor.phone}`} className="font-semibold text-campus-jade-700 hover:underline">
+                    {activeContactMentor.phone}
+                  </a>
+                </div>
+              )}
+              {activeContactMentor.linkedInUrl && (
+                <div className="flex items-center justify-between">
+                  <span className="text-campus-textDim">LinkedIn:</span>
+                  <a
+                    href={activeContactMentor.linkedInUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-campus-jade-700 hover:underline flex items-center space-x-1"
+                  >
+                    <span>View Profile</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 pt-1">
+              {activeContactMentor.email && (
+                <>
+                  <button
+                    onClick={() => copyEmailToClipboard(activeContactMentor.email!)}
+                    className="w-full py-2 bg-campus-surface border border-campus-border rounded-lg text-xs font-semibold text-campus-text hover:bg-campus-borderSubtle flex items-center justify-center space-x-1.5 transition-colors"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-campus-jade-700" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? 'Email Copied!' : 'Copy Email'}</span>
+                  </button>
+
+                  <a
+                    href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(activeContactMentor.email)}&su=${encodeURIComponent('CampusSync Mentorship Inquiry')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2 bg-campus-jade-700 text-white rounded-lg text-xs font-semibold hover:bg-campus-jade-800 flex items-center justify-center space-x-1.5 transition-colors"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Open in Gmail</span>
+                  </a>
+                </>
+              )}
+
+              <button
+                onClick={() => setActiveContactMentor(null)}
+                className="w-full py-2 text-campus-textMuted hover:text-campus-text text-xs font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
