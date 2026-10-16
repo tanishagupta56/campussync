@@ -19,6 +19,8 @@ import { LibraryPage } from './pages/student/LibraryPage';
 import { LostFoundPage } from './pages/student/LostFoundPage';
 import { ConnectPage } from './pages/student/ConnectPage';
 import { AttendancePage } from './pages/student/AttendancePage';
+import { ScholarshipsPage } from './pages/student/ScholarshipsPage';
+import { OpportunitiesPage } from './pages/student/OpportunitiesPage';
 
 // Admin Dashboard
 import { AdminDashboard } from './pages/admin/AdminDashboard';
@@ -130,6 +132,26 @@ export const App: React.FC = () => {
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
                     <StudentLayout>
                       <ConnectPage />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/scholarships"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <ScholarshipsPage />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/opportunities"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <OpportunitiesPage />
                     </StudentLayout>
                   </RoleProtectedRoute>
                 }

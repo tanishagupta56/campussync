@@ -378,4 +378,262 @@ router.patch('/mentors/availability', requireAuth, async (req, res, next) => {
   }
 });
 
+// ==================== SCHOLARSHIPS ====================
+// GET /api/scholarships (students browse, filter, search, saved status, recipient/mentor metrics)
+router.get('/scholarships', requireAuth, async (req, res, next) => {
+  try {
+    const { search, branch } = req.query;
+    const where: any = { isDeleted: false };
+
+    if (search && typeof search === 'string') {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { provider: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (branch && typeof branch === 'string' && branch !== 'ALL') {
+      where.OR = [{ branch: null }, { branch }];
+    }
+
+    const scholarships = await prisma.scholarship.findMany({
+      where,
+      orderBy: { deadline: 'asc' },
+      include: {
+        savedBy: {
+          where: { studentId: req.user!.id },
+          select: { id: true, status: true },
+        },
+        recipients: {
+          include: {
+            student: {
+              include: {
+                mentorProfile: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const enriched = scholarships.map((s) => {
+      const recipientCount = s.recipients.length;
+      const mentorsAvailableCount = s.recipients.filter(
+        (r) => r.student.mentorProfile && r.student.mentorProfile.isAvailable
+      ).length;
+      const isSaved = s.savedBy.length > 0;
+      const applicationStatus = s.savedBy[0]?.status || null;
+
+      // Sanitise: remove raw student user objects to prevent leakage of personal data
+      const { recipients, savedBy, ...rest } = s;
+
+      return {
+        ...rest,
+        recipientCount,
+        mentorsAvailableCount,
+        isSaved,
+        applicationStatus,
+      };
+    });
+
+    res.json({ success: true, data: enriched });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/scholarships (Admin only)
+router.post('/scholarships', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
+  try {
+    const { name, provider, amount, deadline, description, eligibility, branch, applicationLink, isVerifiedByAdmin } = req.body;
+    const created = await prisma.scholarship.create({
+      data: {
+        name,
+        provider,
+        amount,
+        deadline: new Date(deadline),
+        description,
+        eligibility,
+        branch: branch || null,
+        applicationLink,
+        isVerifiedByAdmin: isVerifiedByAdmin ?? true,
+      },
+    });
+    res.json({ success: true, data: created });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/scholarships/:id (Admin only)
+router.patch('/scholarships/:id', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
+  try {
+    const { name, provider, amount, deadline, description, eligibility, branch, applicationLink, isVerifiedByAdmin } = req.body;
+    const updated = await prisma.scholarship.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name && { name }),
+        ...(provider && { provider }),
+        ...(amount && { amount }),
+        ...(deadline && { deadline: new Date(deadline) }),
+        ...(description && { description }),
+        ...(eligibility && { eligibility }),
+        ...(branch !== undefined && { branch }),
+        ...(applicationLink && { applicationLink }),
+        ...(typeof isVerifiedByAdmin === 'boolean' && { isVerifiedByAdmin }),
+      },
+    });
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/scholarships/:id (Admin only - soft delete: hides from students)
+router.delete('/scholarships/:id', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
+  try {
+    await prisma.scholarship.update({
+      where: { id: req.params.id },
+      data: { isDeleted: true },
+    });
+    res.json({ success: true, message: 'Scholarship removed (soft-deleted)' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/scholarships/:id/save (Student save / bookmark toggle)
+router.post('/scholarships/:id/save', requireAuth, async (req, res, next) => {
+  try {
+    const existing = await prisma.savedScholarship.findUnique({
+      where: {
+        studentId_scholarshipId: {
+          studentId: req.user!.id,
+          scholarshipId: req.params.id,
+        },
+      },
+    });
+
+    if (existing) {
+      await prisma.savedScholarship.delete({
+        where: { id: existing.id },
+      });
+      return res.json({ success: true, isSaved: false });
+    } else {
+      await prisma.savedScholarship.create({
+        data: {
+          studentId: req.user!.id,
+          scholarshipId: req.params.id,
+        },
+      });
+      return res.json({ success: true, isSaved: true });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==================== OPPORTUNITIES ====================
+// GET /api/opportunities (search, category filter, saved/applied status)
+router.get('/opportunities', requireAuth, async (req, res, next) => {
+  try {
+    const { search, category } = req.query;
+    const where: any = {};
+
+    if (search && typeof search === 'string') {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { organization: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (category && typeof category === 'string' && category !== 'ALL') {
+      where.category = category;
+    }
+
+    const items = await prisma.opportunity.findMany({
+      where,
+      orderBy: { deadline: 'asc' },
+      include: {
+        savedBy: {
+          where: { studentId: req.user!.id },
+        },
+      },
+    });
+
+    const enriched = items.map((op) => {
+      const savedRecord = op.savedBy[0];
+      const { savedBy, ...rest } = op;
+      return {
+        ...rest,
+        isSaved: Boolean(savedRecord),
+        applicationStatus: savedRecord?.status || null, // 'SAVED' | 'APPLIED' | null
+      };
+    });
+
+    res.json({ success: true, data: enriched });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/opportunities/:id/save
+router.post('/opportunities/:id/save', requireAuth, async (req, res, next) => {
+  try {
+    const existing = await prisma.savedOpportunity.findUnique({
+      where: {
+        studentId_opportunityId: {
+          studentId: req.user!.id,
+          opportunityId: req.params.id,
+        },
+      },
+    });
+
+    if (existing) {
+      await prisma.savedOpportunity.delete({ where: { id: existing.id } });
+      return res.json({ success: true, isSaved: false, status: null });
+    } else {
+      const created = await prisma.savedOpportunity.create({
+        data: {
+          studentId: req.user!.id,
+          opportunityId: req.params.id,
+          status: 'SAVED',
+        },
+      });
+      return res.json({ success: true, isSaved: true, status: created.status });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/opportunities/:id/status (toggle/update APPLIED status)
+router.patch('/api/opportunities/:id/status', requireAuth, async (req, res, next) => {
+  try {
+    const { status } = req.body; // 'SAVED' | 'APPLIED'
+    const updated = await prisma.savedOpportunity.upsert({
+      where: {
+        studentId_opportunityId: {
+          studentId: req.user!.id,
+          opportunityId: req.params.id,
+        },
+      },
+      create: {
+        studentId: req.user!.id,
+        opportunityId: req.params.id,
+        status: status || 'APPLIED',
+      },
+      update: {
+        status: status || 'APPLIED',
+      },
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
