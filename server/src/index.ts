@@ -14,6 +14,8 @@ import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 app.use(
   helmet({
     contentSecurityPolicy: false,
@@ -23,7 +25,7 @@ app.use(
 
 app.use(
   cors({
-    origin: config.isProduction ? true : [config.clientUrl, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: config.isProduction ? (process.env.CLIENT_URL || config.clientUrl) : [config.clientUrl, 'http://localhost:5173', 'http://127.0.0.1:5173'],
     credentials: true,
   })
 );
@@ -34,7 +36,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health Check
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ ok: true });
+  res.status(200).json({ success: true });
 });
 
 // API Routes
@@ -44,16 +46,17 @@ app.use('/api', attendanceRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api', searchRoutes);
 
-// In production, serve Vite client/dist and fallback to index.html for non-API routes
-if (config.isProduction) {
-  const clientDistPath = path.resolve(__dirname, '../../client/dist');
-  if (fs.existsSync(clientDistPath)) {
-    app.use(express.static(clientDistPath));
-    app.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api')) return next();
-      res.sendFile(path.join(clientDistPath, 'index.html'));
-    });
-  }
+// Serve Vite client/dist and fallback to index.html for non-API routes
+const clientDistPath = fs.existsSync(path.resolve(__dirname, '../../client/dist'))
+  ? path.resolve(__dirname, '../../client/dist')
+  : path.resolve(process.cwd(), 'client/dist');
+
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
 }
 
 // 404 Handler for unhandled API calls
@@ -66,8 +69,9 @@ app.use('/api/*', (req, res) => {
 
 app.use(errorHandler);
 
-const server = app.listen(config.port, () => {
-  console.log(`[CampusSync Server] Running on port ${config.port} (env: ${config.nodeEnv})`);
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : config.port;
+const server = app.listen(PORT, () => {
+  console.log(`[CampusSync Server] Running on port ${PORT} (env: ${config.nodeEnv})`);
 });
 
 export default app;
