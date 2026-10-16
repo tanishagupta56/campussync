@@ -77,6 +77,7 @@ export const StudentLayout: React.FC<StudentLayoutProps> = ({ children, rightPan
                   <div key={item.path} className="relative group">
                     <NavLink
                       to={item.path}
+                      title={item.name}
                       aria-label={item.name}
                       className={({ isActive: active }) =>
                         `w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 outline-hidden focus-visible:ring-2 focus-visible:ring-campus-jade-700 ${
@@ -90,7 +91,7 @@ export const StudentLayout: React.FC<StudentLayoutProps> = ({ children, rightPan
                     </NavLink>
 
                     {/* Tooltip on hover & keyboard focus */}
-                    <span className="pointer-events-none absolute left-[56px] top-1/2 -translate-y-1/2 z-50 hidden group-hover:flex group-focus-within:flex px-2.5 py-1 text-[11px] font-medium text-white bg-campus-text rounded-lg whitespace-nowrap shadow-elevated transition-opacity">
+                    <span className="pointer-events-none absolute left-[56px] top-1/2 -translate-y-1/2 z-50 hidden group-hover:flex group-focus-within:flex px-2.5 py-1 text-[12px] font-medium text-white bg-campus-text rounded-full whitespace-nowrap shadow-elevated transition-opacity">
                       {item.name}
                     </span>
                   </div>
@@ -103,12 +104,13 @@ export const StudentLayout: React.FC<StudentLayoutProps> = ({ children, rightPan
           <div className="relative group pt-2">
             <button
               onClick={logout}
+              title="Logout"
               aria-label="Logout"
               className="w-11 h-11 rounded-full bg-white text-campus-textMuted hover:text-campus-alert-red hover:bg-white/90 flex items-center justify-center shadow-subtle transition-all outline-hidden focus-visible:ring-2 focus-visible:ring-campus-alert-red"
             >
               <LogOut className="w-4 h-4 stroke-[1.75]" />
             </button>
-            <span className="pointer-events-none absolute left-[56px] top-1/2 -translate-y-1/2 z-50 hidden group-hover:flex group-focus-within:flex px-2.5 py-1 text-[11px] font-medium text-white bg-campus-text rounded-lg whitespace-nowrap shadow-elevated">
+            <span className="pointer-events-none absolute left-[56px] top-1/2 -translate-y-1/2 z-50 hidden group-hover:flex group-focus-within:flex px-2.5 py-1 text-[12px] font-medium text-white bg-campus-text rounded-full whitespace-nowrap shadow-elevated">
               Logout
             </span>
           </div>
