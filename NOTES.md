@@ -3,7 +3,8 @@
 ## Built Features
 - Auth (OTP challenge, role check, session tokens) & Role-based routes
 - Student Pages: Today, Announcements, Calendar, Deadlines, Attendance, Library, Lost & Found, Connect, Scholarships, Opportunities, Clubs, CampusSync AI, Campus Issues
-- Admin Area: Announcements CRUD, Event & Deadline creation, Library gate turnstiles, Scholarship soft-delete
+- Global Search: GET /api/search across all content types, categorised dropdown in center area header
+- Admin Area: Announcements CRUD, Event & Deadline creation, Library gate turnstiles, Scholarship soft-delete; Overview panel with StatCards and campus-issues-by-status chart
 - Faculty Dashboard: Academic notices, session scheduling, assignment deadlines, own subject attendance aggregates
 - Club Core Dashboard: Manage assigned club info, host workshops/meets, broadcast society announcements
 

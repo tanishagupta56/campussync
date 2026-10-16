@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { apiRequest } from '../../lib/apiClient';
 import { PageHeader, Card, Badge, EmptyState } from '../../components/ui';
+import { AdminOverviewPanel } from './AdminOverviewPanel';
 import {
   ShieldCheck,
   Plus,
@@ -137,7 +138,7 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[var(--color-campus-bg)] text-campus-text p-3 sm:p-6 flex flex-col items-center">
-      <div className="w-full max-w-6xl bg-campus-surface rounded-[28px] p-6 sm:p-8 shadow-card flex flex-col gap-6">
+      <div className="w-full max-w-7xl bg-campus-surface rounded-[28px] p-6 sm:p-8 shadow-card flex flex-col gap-6">
         {/* Top Navbar */}
         <div className="flex items-center justify-between pb-4 border-b border-black/5">
           <div className="flex items-center gap-3">
@@ -170,6 +171,12 @@ export const AdminDashboard: React.FC = () => {
           title="Administrative Controls"
           subtitle="Publish verified notices, schedule campus calendar events, set deadlines, and operate gate turnstiles."
         />
+
+        {/* Two-column layout: main controls left, overview panel right */}
+        <div className="flex flex-col xl:flex-row gap-6">
+          {/* Main Controls Column */}
+          <div className="flex-1 min-w-0 flex flex-col gap-6">
+
 
         {/* Library Gate Controls */}
         <Card tint="tint-1" className="p-6">
@@ -385,6 +392,18 @@ export const AdminDashboard: React.FC = () => {
             </div>
           )}
         </Card>
+
+          </div>{/* end main controls column */}
+
+          {/* Right Overview Panel (320px, sticky) */}
+          <aside className="xl:w-[320px] flex-shrink-0">
+            <div className="sticky top-6 rounded-[22px] bg-white p-5 shadow-card">
+              <AdminOverviewPanel />
+            </div>
+          </aside>
+
+        </div>{/* end two-column flex */}
+
       </div>
     </div>
   );

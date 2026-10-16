@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.routes';
 import campusRoutes from './routes/campus.routes';
 import attendanceRoutes from './routes/attendance.routes';
 import aiRoutes from './routes/ai.routes';
+import searchRoutes from './routes/search.routes';
 import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
@@ -41,6 +42,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', campusRoutes);
 app.use('/api', attendanceRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api', searchRoutes);
 
 // In production, serve Vite client/dist and fallback to index.html for non-API routes
 if (config.isProduction) {

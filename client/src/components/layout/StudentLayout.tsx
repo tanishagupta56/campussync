@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { GlobalSearch } from './GlobalSearch';
 import { useAuth } from '../../context/AuthContext';
 import {
   Home,
@@ -115,6 +116,7 @@ export const StudentLayout: React.FC<StudentLayoutProps> = ({ children, rightPan
 
         {/* CENTER CONTENT AREA */}
         <main className="flex-1 min-w-0 pb-20 md:pb-0 px-1 sm:px-2 md:px-3">
+          <GlobalSearch />
           {children}
         </main>
 
