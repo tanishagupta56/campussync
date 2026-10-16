@@ -943,7 +943,7 @@ router.get('/faculty/overview', requireAuth, requireRole(Role.FACULTY), async (r
       where: {
         OR: [
           { facultyId: req.user!.id },
-          { facultyName: { contains: req.user!.fullName, mode: 'insensitive' } },
+          { facultyName: { contains: (req.user as any).fullName, mode: 'insensitive' } },
         ],
       },
       include: {

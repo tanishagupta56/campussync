@@ -211,7 +211,7 @@ router.post('/chat', requireAuth, aiChatRateLimiter, async (req, res, next) => {
 
         if (response.ok) {
           const data = await response.json();
-          answer = data.choices[0]?.message?.content || '';
+          answer = (data as any).choices?.[0]?.message?.content || '';
         }
       } catch (err) {
         // Fall back gracefully to rule-based summary
