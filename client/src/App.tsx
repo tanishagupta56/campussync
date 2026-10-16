@@ -23,8 +23,10 @@ import { ScholarshipsPage } from './pages/student/ScholarshipsPage';
 import { OpportunitiesPage } from './pages/student/OpportunitiesPage';
 import { ClubsPage } from './pages/student/ClubsPage';
 
-// Admin Dashboard
+// Dashboards
 import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { FacultyDashboard } from './pages/faculty/FacultyDashboard';
+import { ClubDashboard } from './pages/club/ClubDashboard';
 
 const queryClient = new QueryClient({
   defaultOptions: {
