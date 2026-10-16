@@ -10,6 +10,8 @@ interface AuthContextValue {
   initiateLogin: (email: string, password: string, selectedRole: Role) => Promise<LoginChallenge>;
   verifyOtp: (challengeId: string, otp: string) => Promise<User>;
   resendOtp: (challengeId: string) => Promise<void>;
+  register: (params: { fullName: string; email: string; password: string; branch: string; semester: number }) => Promise<LoginChallenge>;
+  verifyRegistration: (challengeId: string, otp: string) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -76,6 +78,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const register = async (params: { fullName: string; email: string; password: string; branch: string; semester: number }): Promise<LoginChallenge> => {
+    const data = await apiRequest<LoginChallenge>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+    return data;
+  };
+
+  const verifyRegistration = async (challengeId: string, otp: string): Promise<User> => {
+    const data = await apiRequest<{ user: User; token: string }>('/api/auth/verify-registration', {
+      method: 'POST',
+      body: JSON.stringify({ challengeId, otp }),
+    });
+
+    localStorage.setItem('campussync_token', data.token);
+    setToken(data.token);
+    setUser(data.user);
+    return data.user;
+  };
+
   const logout = async (): Promise<void> => {
     try {
       await apiRequest('/api/auth/logout', { method: 'POST' });
@@ -99,6 +121,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         initiateLogin,
         verifyOtp,
         resendOtp,
+        register,
+        verifyRegistration,
         logout,
       }}
     >

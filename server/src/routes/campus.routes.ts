@@ -3,9 +3,57 @@ import { PrismaClient, Role } from '@prisma/client';
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRole } from '../middlewares/role.middleware';
 import dayjs from 'dayjs';
+import { config } from '../config/env';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// GET /api/config (public)
+router.get('/config', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      devShowOtp: config.devShowOtp,
+    },
+  });
+});
+
+// GET /api/meta/programs (public)
+router.get('/meta/programs', async (req, res, next) => {
+  try {
+    const subjects = await prisma.subject.findMany({
+      select: { program: true, branch: true, semester: true },
+      distinct: ['program', 'branch', 'semester'],
+      orderBy: [{ branch: 'asc' }, { semester: 'asc' }],
+    });
+
+    const branchMap = new Map<string, { program: string; branch: string; semesters: number[] }>();
+    for (const sub of subjects) {
+      if (!branchMap.has(sub.branch)) {
+        branchMap.set(sub.branch, { program: sub.program, branch: sub.branch, semesters: [] });
+      }
+      const item = branchMap.get(sub.branch)!;
+      if (!item.semesters.includes(sub.semester)) {
+        item.semesters.push(sub.semester);
+      }
+    }
+
+    const programs = Array.from(branchMap.values()).map(b => ({
+      ...b,
+      semesters: b.semesters.sort((a, b) => a - b),
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        programs,
+        combinations: subjects,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /api/announcements
 router.get('/announcements', requireAuth, async (req, res, next) => {

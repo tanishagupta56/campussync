@@ -70,6 +70,62 @@ export class AuthController {
     }
   }
 
+  static async register(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { fullName, email, password, branch, semester } = req.body;
+      const ipAddress = req.ip || req.socket.remoteAddress;
+
+      const result = await AuthService.registerUser({
+        fullName,
+        email,
+        password,
+        branch,
+        semester,
+        ipAddress,
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async verifyRegistration(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { challengeId, otp } = req.body;
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      const result = await AuthService.verifyRegistration({
+        challengeId,
+        otp,
+        ipAddress,
+        userAgent,
+      });
+
+      // Set secure httpOnly cookie
+      res.cookie('token', result.token, {
+        httpOnly: true,
+        secure: config.isProduction,
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          user: result.user,
+          token: result.token,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async logout(req: Request, res: Response, next: NextFunction) {
     try {
       const token = req.cookies?.token || (req.headers.authorization ? req.headers.authorization.split(' ')[1] : '');

@@ -34,10 +34,24 @@ export const LoginPage: React.FC = () => {
 
   // Form State
   const [selectedRole, setSelectedRole] = useState<Role>('STUDENT');
-  const [email, setEmail] = useState('aarav.sharma@campus.edu');
-  const [password, setPassword] = useState('Student@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [devShowOtp, setDevShowOtp] = useState<boolean>(false);
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((res) => {
+        if (res?.data?.devShowOtp) {
+          setDevShowOtp(true);
+          setEmail('aarav.sharma@campus.edu');
+          setPassword('Student@123');
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // OTP Challenge State
   const [challenge, setChallenge] = useState<LoginChallenge | null>(null);
@@ -46,19 +60,21 @@ export const LoginPage: React.FC = () => {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isResending, setIsResending] = useState(false);
 
-  // Auto-fill demo credentials on role change for smooth demonstration
+  // Auto-fill demo credentials on role change when devShowOtp is enabled
   const handleRoleChange = (newRole: Role) => {
     setSelectedRole(newRole);
     setErrorMessage(null);
-    if (newRole === 'STUDENT') {
-      setEmail('aarav.sharma@campus.edu');
-      setPassword('Student@123');
-    } else if (newRole === 'FACULTY') {
-      setEmail('dr.ramanujan@campus.edu');
-      setPassword('Faculty@123');
-    } else if (newRole === 'ADMINISTRATOR') {
-      setEmail('admin@campus.edu');
-      setPassword('Admin@123');
+    if (devShowOtp) {
+      if (newRole === 'STUDENT') {
+        setEmail('aarav.sharma@campus.edu');
+        setPassword('Student@123');
+      } else if (newRole === 'FACULTY') {
+        setEmail('dr.ramanujan@campus.edu');
+        setPassword('Faculty@123');
+      } else if (newRole === 'ADMINISTRATOR') {
+        setEmail('admin@campus.edu');
+        setPassword('Admin@123');
+      }
     }
   };
 
@@ -265,11 +281,13 @@ export const LoginPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Demo Hint Badge */}
-              <div className="p-3 bg-campus-sage-50 border border-campus-sage-200 rounded-lg text-xs text-campus-sage-700 flex items-center justify-between">
-                <span>Demo loaded for: <strong>{selectedRole}</strong></span>
-                <span className="text-[11px] text-campus-textDim font-mono">pw: {selectedRole === 'STUDENT' ? 'Student@123' : selectedRole === 'FACULTY' ? 'Faculty@123' : 'Admin@123'}</span>
-              </div>
+              {/* Demo Hint Badge — only shown if devShowOtp is true */}
+              {devShowOtp && (
+                <div className="p-3 bg-campus-sage-50 border border-campus-sage-200 rounded-lg text-xs text-campus-sage-700 flex items-center justify-between">
+                  <span>Demo loaded for: <strong>{selectedRole}</strong></span>
+                  <span className="text-[11px] text-campus-textDim font-mono">pw: {selectedRole === 'STUDENT' ? 'Student@123' : selectedRole === 'FACULTY' ? 'Faculty@123' : 'Admin@123'}</span>
+                </div>
+              )}
 
               {/* Submit Button */}
               <button
@@ -289,6 +307,13 @@ export const LoginPage: React.FC = () => {
                   </>
                 )}
               </button>
+
+              <div className="text-center pt-2 text-xs text-campus-textMuted">
+                New student?{' '}
+                <Link to="/register" className="text-campus-jade-700 hover:underline font-semibold">
+                  Create account
+                </Link>
+              </div>
             </form>
           ) : (
             /* STEP 3: 6-Digit OTP Verification Screen */
@@ -303,8 +328,8 @@ export const LoginPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Development OTP Banner — shown only when DEV_SHOW_OTP=true on the server */}
-              {challenge.devOtp ? (
+              {/* Development OTP Banner — shown only when DEV_SHOW_OTP=true on the server and challenge.devOtp is present */}
+              {devShowOtp && challenge.devOtp ? (
                 <div className="p-3.5 bg-amber-50 border-2 border-amber-300 rounded-lg">
                   <div className="flex items-center space-x-2 mb-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full">Demo Mode</span>
@@ -316,12 +341,7 @@ export const LoginPage: React.FC = () => {
                   </div>
                   <p className="text-[10px] text-amber-600 mt-1">This banner is hidden automatically in production.</p>
                 </div>
-              ) : (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                  <div className="font-semibold mb-0.5">Development Testing Mode:</div>
-                  Check your server terminal log — the 6-digit OTP is printed there automatically.
-                </div>
-              )}
+              ) : null}
 
               <div>
                 <label htmlFor="otp" className="block text-xs font-semibold text-campus-text mb-2">

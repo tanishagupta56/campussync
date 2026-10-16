@@ -9,6 +9,7 @@ import { StudentLayout } from './components/layout/StudentLayout';
 // Auth Pages
 import { LoginPage } from './pages/auth/LoginPage';
 import { ClubLoginPage } from './pages/auth/ClubLoginPage';
+import { RegisterPage } from './pages/auth/RegisterPage';
 
 // Built Student Pages
 import { TodayPage } from './pages/student/TodayPage';
@@ -48,6 +49,7 @@ export const App: React.FC = () => {
             <Routes>
               {/* Public Auth */}
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
               <Route path="/club-login" element={<ClubLoginPage />} />
 
               {/* Student Built Routes */}

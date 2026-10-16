@@ -43,3 +43,29 @@ export const aiChatRateLimiter = rateLimit({
     message: 'CampusSync AI query rate limit reached. Please wait a moment before sending another message.',
   },
 });
+
+export const registerIpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // max 10 registration attempts per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'TooManyRequests',
+    message: 'Too many registration attempts from this IP. Please wait before trying again.',
+  },
+});
+
+export const registerEmailRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // max 5 registration attempts per email address
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = req.body?.email;
+    return typeof email === 'string' ? email.toLowerCase().trim() : (req.ip || 'unknown');
+  },
+  message: {
+    error: 'TooManyRequests',
+    message: 'Too many registration attempts for this email address. Please wait before trying again.',
+  },
+});

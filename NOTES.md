@@ -2,6 +2,7 @@
 
 ## Built Features
 - Auth (OTP challenge, role check, session tokens) & Role-based routes
+- Real Email OTP (Resend) & Student Self-Registration (POST /api/auth/register, POST /api/auth/verify-registration, GET /api/meta/programs, provisioning CLI)
 - Student Pages: Today, Announcements, Calendar, Deadlines, Attendance, Library, Lost & Found, Connect, Scholarships, Opportunities, Clubs, CampusSync AI, Campus Issues
 - Global Search: GET /api/search across all content types, categorised dropdown in center area header
 - Admin Area: Announcements CRUD, Event & Deadline creation, Library gate turnstiles, Scholarship soft-delete; Overview panel with StatCards and campus-issues-by-status chart
@@ -12,17 +13,17 @@
 - Placeholder component exists for unmounted pages (`PlaceholderPage.tsx`)
 
 ## Not Built Yet
-- Production email delivery (uses dev console / demo banner)
 - Three.js 3D library visualization
 
 ## Commands
 - Local: `npm run db:start && npm run dev:server` (backend) / `npm run dev:client` (frontend)
+- Provision Account: `npm run create-user -- <role> <email> <password> <name>`
 - Render Build: `npm run build`
 - Render Start: `npm run start`
 - Render Seed: `npm run seed:base` (baseline accounts) / `npm run seed:demo` (sample posts)
 
 ## Required Environment Variables
-- `PORT`, `NODE_ENV`, `DATABASE_URL`, `JWT_SECRET`, `SESSION_SECRET`, `DEV_SHOW_OTP`
+- `PORT`, `NODE_ENV`, `DATABASE_URL`, `JWT_SECRET`, `SESSION_SECRET`, `DEV_SHOW_OTP`, `EMAIL_API_KEY`, `EMAIL_FROM`
 
 ## Golden Rules
 1. Additive database migrations only; never edit old migrations.
