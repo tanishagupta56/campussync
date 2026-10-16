@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../../lib/apiClient';
 import { useToast } from '../../context/ToastContext';
-import { PageHeader, Card, Badge, Chip, ProgressBar, LoadingSkeleton, EmptyState } from '../../components/ui';
+import { PageHeader, Card, Badge, Chip, ProgressBar, LoadingSkeleton } from '../../components/ui';
 import {
   CalendarCheck,
   CheckCircle2,
@@ -250,16 +250,7 @@ export const AttendancePage: React.FC = () => {
           {/* Per-Subject Status Cards */}
           <div>
             <h2 className="text-sm font-medium text-campus-text mb-3 px-1">Enrolled Course Breakdown</h2>
-            {!summary?.subjects || summary.subjects.length === 0 ? (
-              <Card tint="default" className="p-6 text-center">
-                <EmptyState
-                  icon={CalendarCheck}
-                  title="No enrolled courses"
-                  description="No subjects have been linked to your branch and semester yet."
-                />
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {summary?.subjects.map((sub, idx) => {
                 const isSafe = sub.percentage >= 80;
                 const isBorderline = sub.percentage >= 75 && sub.percentage < 80;
