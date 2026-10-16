@@ -2,16 +2,17 @@
 
 ## Built Features
 - Auth (OTP challenge, role check, session tokens) & Role-based routes
-- Student Pages: Today, Announcements, Calendar, Deadlines, Attendance, Library, Lost & Found, Connect, Scholarships, Opportunities
+- Student Pages: Today, Announcements, Calendar, Deadlines, Attendance, Library, Lost & Found, Connect, Scholarships, Opportunities, Clubs
 - Admin Area: Announcements CRUD, Event & Deadline creation, Library gate turnstiles, Scholarship soft-delete
+- Faculty Dashboard: Academic notices, session scheduling, assignment deadlines, own subject attendance aggregates
+- Club Core Dashboard: Manage assigned club info, host workshops/meets, broadcast society announcements
 
 ## Partly Built Features
-- Database schemas & seed models exist for: Clubs, Campus Issues
+- Database schemas & seed models exist for: Campus Issues
 - Placeholder component exists for unmounted pages (`PlaceholderPage.tsx`)
 
 ## Not Built Yet
-- Student Pages: Clubs, CampusSync AI
-- Faculty and Club Core dashboards
+- Student Pages: Campus Issues, CampusSync AI
 - Production email delivery (uses dev console / demo banner)
 - Three.js 3D library visualization
 

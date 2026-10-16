@@ -636,4 +636,169 @@ router.patch('/api/opportunities/:id/status', requireAuth, async (req, res, next
   }
 });
 
+// ==================== CLUBS & SOCIETIES ====================
+// GET /api/clubs (browse clubs with events, announcements, and recruitment)
+router.get('/clubs', requireAuth, async (req, res, next) => {
+  try {
+    const { category, search } = req.query;
+    const where: any = {};
+    if (category && typeof category === 'string' && category !== 'ALL') {
+      where.category = category;
+    }
+    if (search && typeof search === 'string') {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const clubs = await prisma.club.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      include: {
+        events: {
+          where: { startTime: { gte: new Date() } },
+          orderBy: { startTime: 'asc' },
+          take: 3,
+        },
+        members: {
+          where: { role: 'LEAD' },
+          include: { user: { select: { fullName: true, email: true } } },
+        },
+      },
+    });
+
+    res.json({ success: true, data: clubs });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/club/my-club (Club Core gets their managed club)
+router.get('/club/my-club', requireAuth, requireRole(Role.CLUB_CORE, Role.ADMINISTRATOR), async (req, res, next) => {
+  try {
+    const membership = await prisma.clubMembership.findFirst({
+      where: { userId: req.user!.id },
+      include: {
+        club: {
+          include: {
+            events: { orderBy: { startTime: 'desc' } },
+          },
+        },
+      },
+    });
+
+    if (!membership && req.user!.role !== Role.ADMINISTRATOR) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You are not assigned as Core of any club.' });
+    }
+
+    const club = membership ? membership.club : await prisma.club.findFirst({ include: { events: true } });
+    res.json({ success: true, data: club });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/clubs/:id (Club Core manages ONLY their own club, 403 otherwise)
+router.patch('/clubs/:id', requireAuth, requireRole(Role.CLUB_CORE, Role.ADMINISTRATOR), async (req, res, next) => {
+  try {
+    // Ownership check on the server
+    if (req.user!.role !== Role.ADMINISTRATOR) {
+      const membership = await prisma.clubMembership.findFirst({
+        where: { clubId: req.params.id, userId: req.user!.id },
+      });
+      if (!membership) {
+        return res.status(403).json({ error: 'Forbidden', message: 'You can only edit your own club.' });
+      }
+    }
+
+    const { description, contactEmail, websiteUrl } = req.body;
+    const updated = await prisma.club.update({
+      where: { id: req.params.id },
+      data: {
+        ...(description && { description }),
+        ...(contactEmail && { contactEmail }),
+        ...(websiteUrl !== undefined && { websiteUrl }),
+      },
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/clubs/:id/events (Club Core creates event for their club)
+router.post('/clubs/:id/events', requireAuth, requireRole(Role.CLUB_CORE, Role.ADMINISTRATOR), async (req, res, next) => {
+  try {
+    if (req.user!.role !== Role.ADMINISTRATOR) {
+      const membership = await prisma.clubMembership.findFirst({
+        where: { clubId: req.params.id, userId: req.user!.id },
+      });
+      if (!membership) {
+        return res.status(403).json({ error: 'Forbidden', message: 'You can only create events for your own club.' });
+      }
+    }
+
+    const { title, description, location, startTime, endTime } = req.body;
+    const event = await prisma.event.create({
+      data: {
+        title,
+        description: description || '',
+        category: 'CLUB',
+        location: location || 'Campus',
+        startTime: new Date(startTime),
+        endTime: new Date(endTime || startTime),
+        clubId: req.params.id,
+        organizerId: req.user!.id,
+        isPublic: true,
+      },
+    });
+
+    res.json({ success: true, data: event });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==================== FACULTY DASHBOARD ====================
+// GET /api/faculty/overview (Aggregate attendance for their own subjects ONLY)
+router.get('/faculty/overview', requireAuth, requireRole(Role.FACULTY), async (req, res, next) => {
+  try {
+    // Fetch subjects assigned to this faculty
+    const subjects = await prisma.subject.findMany({
+      where: {
+        OR: [
+          { facultyId: req.user!.id },
+          { facultyName: { contains: req.user!.fullName, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        attendanceRecords: true,
+      },
+      orderBy: { code: 'asc' },
+    });
+
+    const breakdown = subjects.map((sub) => {
+      const totalMarks = sub.attendanceRecords.length;
+      const presentMarks = sub.attendanceRecords.filter((r) => r.status === 'PRESENT').length;
+      const averageAttendance = totalMarks > 0 ? Math.round((presentMarks / totalMarks) * 100) : 100;
+
+      return {
+        id: sub.id,
+        code: sub.code,
+        name: sub.name,
+        branch: sub.branch,
+        semester: sub.semester,
+        totalMarks,
+        averageAttendance,
+      };
+    });
+
+    res.json({ success: true, data: { subjects: breakdown } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

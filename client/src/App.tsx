@@ -21,6 +21,7 @@ import { ConnectPage } from './pages/student/ConnectPage';
 import { AttendancePage } from './pages/student/AttendancePage';
 import { ScholarshipsPage } from './pages/student/ScholarshipsPage';
 import { OpportunitiesPage } from './pages/student/OpportunitiesPage';
+import { ClubsPage } from './pages/student/ClubsPage';
 
 // Admin Dashboard
 import { AdminDashboard } from './pages/admin/AdminDashboard';
@@ -156,6 +157,16 @@ export const App: React.FC = () => {
                   </RoleProtectedRoute>
                 }
               />
+              <Route
+                path="/clubs"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <ClubsPage />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Administrator Route */}
               <Route
@@ -163,6 +174,34 @@ export const App: React.FC = () => {
                 element={
                   <RoleProtectedRoute allowedRoles={['ADMINISTRATOR']}>
                     <AdminDashboard />
+                  </RoleProtectedRoute>
+                }
+              />
+
+              {/* Faculty Route */}
+              <Route
+                path="/faculty"
+                element={
+                  <RoleProtectedRoute allowedRoles={['FACULTY']}>
+                    <FacultyDashboard />
+                  </RoleProtectedRoute>
+                }
+              />
+
+              {/* Club Core Route */}
+              <Route
+                path="/club"
+                element={
+                  <RoleProtectedRoute allowedRoles={['CLUB_CORE', 'ADMINISTRATOR']}>
+                    <ClubDashboard />
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/club/dashboard"
+                element={
+                  <RoleProtectedRoute allowedRoles={['CLUB_CORE', 'ADMINISTRATOR']}>
+                    <ClubDashboard />
                   </RoleProtectedRoute>
                 }
               />
