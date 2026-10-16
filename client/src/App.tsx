@@ -22,6 +22,7 @@ import { AttendancePage } from './pages/student/AttendancePage';
 import { ScholarshipsPage } from './pages/student/ScholarshipsPage';
 import { OpportunitiesPage } from './pages/student/OpportunitiesPage';
 import { ClubsPage } from './pages/student/ClubsPage';
+import { AiChatPage } from './pages/student/AiChatPage';
 
 // Dashboards
 import { AdminDashboard } from './pages/admin/AdminDashboard';
@@ -165,6 +166,16 @@ export const App: React.FC = () => {
                   <RoleProtectedRoute allowedRoles={['STUDENT']}>
                     <StudentLayout>
                       <ClubsPage />
+                    </StudentLayout>
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/ai"
+                element={
+                  <RoleProtectedRoute allowedRoles={['STUDENT']}>
+                    <StudentLayout>
+                      <AiChatPage />
                     </StudentLayout>
                   </RoleProtectedRoute>
                 }

@@ -32,3 +32,14 @@ export const resendOtpRateLimiter = rateLimit({
     message: 'OTP request rate limit reached. Please wait before requesting another code.',
   },
 });
+
+export const aiChatRateLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 30, // max 30 queries per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'TooManyRequests',
+    message: 'CampusSync AI query rate limit reached. Please wait a moment before sending another message.',
+  },
+});
