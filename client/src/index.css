@@ -3,13 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --color-campus-bg: #FBFBF9;
-  --color-campus-surface: #F4F4F0;
+  --color-campus-bg: #F9F8F5; /* Warm ivory */
+  --color-campus-surface: #F2EFE9;
   --color-campus-card: #FFFFFF;
-  --color-campus-border: #E8E8E2;
+  --color-campus-border: #E8E5DD;
   --color-campus-text: #1A2421;
   --color-campus-jade: #1B4D3E;
-  --color-campus-sage: #D5DFD4;
+  --color-campus-sage: #DDE5DC;
+  /* Design Tokens for pastel card tints */
+  --card-tint-1: #EFF4EE; /* soft sage */
+  --card-tint-2: #EAF4F0; /* soft mint */
+  --card-tint-3: #F7F3EB; /* warm sand */
+  --card-tint-4: #FDF1EF; /* soft blush for urgency */
 }
 
 body {

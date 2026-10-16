@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../../lib/apiClient';
 import { useToast } from '../../context/ToastContext';
+import { PageHeader, Card, Badge, Chip, EmptyState } from '../../components/ui';
 import {
   Bell,
   Search,
-  Filter,
   ShieldCheck,
   RefreshCw,
   Building,
@@ -66,129 +66,103 @@ export const AnnouncementsPage: React.FC = () => {
   }, [searchTerm, selectedSource]);
 
   return (
-    <div className="space-y-6">
+    <div className="py-2 space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-campus-border gap-2">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-campus-text">Campus Announcements</h1>
-          <p className="text-xs text-campus-textMuted mt-0.5">
-            Verified updates from university administration, academic departments, and student clubs.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Campus Announcements"
+        subtitle="Verified notices from university leadership, academic faculty, and student societies."
+      />
 
-      {/* Filter and Search Bar */}
-      <div className="bg-campus-card border border-campus-border rounded-xl p-4 shadow-card flex flex-col md:flex-row items-center gap-3">
+      {/* Filter Chips & Search Bar */}
+      <div className="flex flex-col md:flex-row items-center gap-3">
         {/* Search Input */}
         <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-campus-textDim absolute left-3.5 top-3" />
+          <Search className="w-4 h-4 text-campus-textDim absolute left-4 top-3" />
           <input
             type="text"
-            placeholder="Search announcements by title or content..."
+            placeholder="Search by title, department, or keyword..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3.5 py-2 bg-campus-surface border border-campus-border rounded-lg text-xs text-campus-text placeholder:text-campus-textDim focus:bg-white focus:border-campus-jade-700 transition-colors"
+            className="w-full pl-10 pr-4 py-2 bg-white rounded-full text-xs text-campus-text placeholder:text-campus-textDim shadow-subtle border-none outline-hidden focus:ring-2 focus:ring-campus-jade-700 transition-all"
           />
         </div>
 
-        {/* Source Filter Tabs */}
-        <div className="flex items-center space-x-1 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-          {[
-            { label: 'All Sources', value: 'ALL' },
-            { label: 'Administration', value: 'ADMINISTRATION' },
-            { label: 'Faculty', value: 'FACULTY' },
-            { label: 'Clubs', value: 'CLUB' },
-          ].map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setSelectedSource(tab.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                selectedSource === tab.value
-                  ? 'bg-campus-jade-700 text-white'
-                  : 'bg-campus-surface text-campus-textMuted hover:text-campus-text hover:bg-campus-borderSubtle'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* Pill Filter Chips */}
+        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 no-scrollbar">
+          <Chip label="All" active={selectedSource === 'ALL'} onClick={() => setSelectedSource('ALL')} />
+          <Chip
+            label="Admin"
+            icon={Building}
+            active={selectedSource === 'ADMINISTRATION'}
+            onClick={() => setSelectedSource('ADMINISTRATION')}
+          />
+          <Chip
+            label="Faculty"
+            icon={GraduationCap}
+            active={selectedSource === 'FACULTY'}
+            onClick={() => setSelectedSource('FACULTY')}
+          />
+          <Chip
+            label="Clubs"
+            icon={Users}
+            active={selectedSource === 'CLUB'}
+            onClick={() => setSelectedSource('CLUB')}
+          />
         </div>
       </div>
 
-      {/* Announcements List */}
+      {/* Announcements 2-column Card Grid */}
       {loading ? (
-        <div className="py-20 flex flex-col items-center justify-center space-y-2">
+        <div className="py-20 flex flex-col items-center justify-center gap-2">
           <RefreshCw className="w-6 h-6 text-campus-jade-700 animate-spin" />
-          <span className="text-xs text-campus-textMuted">Loading announcements...</span>
+          <span className="text-xs text-campus-textMuted font-medium">Loading announcements...</span>
         </div>
       ) : announcements.length === 0 ? (
-        <div className="p-12 text-center bg-campus-card border border-campus-border rounded-xl">
-          <Bell className="w-8 h-8 text-campus-textDim mx-auto mb-2 opacity-50" />
-          <p className="text-xs font-semibold text-campus-text">No announcements found</p>
-          <span className="text-[11px] text-campus-textMuted">Try refining your search terms or filter selection.</span>
-        </div>
+        <EmptyState
+          icon={Bell}
+          title="No notices found"
+          description="Try broadening your search keywords or switching filters."
+        />
       ) : (
-        <div className="space-y-3.5">
-          {announcements.map((item) => {
-            const isHighPriority = item.priority === 'HIGH' || item.priority === 'URGENT';
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {announcements.map((item, idx) => {
+            const tints: ('tint-1' | 'tint-2' | 'tint-3')[] = ['tint-1', 'tint-2', 'tint-3'];
+            const tint = item.priority === 'HIGH' || item.priority === 'URGENT' ? 'tint-4' : tints[idx % tints.length];
 
             return (
-              <div
-                key={item.id}
-                className="p-5 bg-campus-card border border-campus-border rounded-xl shadow-card hover:border-campus-sage-300 transition-colors"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                    {/* Source Category Badge */}
-                    <span
-                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center space-x-1 ${
-                        item.sourceCategory === 'ADMINISTRATION'
-                          ? 'bg-campus-sage-100 text-campus-sage-900 border border-campus-sage-200'
-                          : item.sourceCategory === 'FACULTY'
-                          ? 'bg-campus-jade-50 text-campus-jade-700 border border-campus-jade-200'
-                          : 'bg-amber-50 text-amber-800 border border-amber-200'
-                      }`}
-                    >
-                      {item.sourceCategory === 'ADMINISTRATION' && <Building className="w-3 h-3" />}
-                      {item.sourceCategory === 'FACULTY' && <GraduationCap className="w-3 h-3" />}
-                      {item.sourceCategory === 'CLUB' && <Users className="w-3 h-3" />}
-                      <span>{item.sourceCategory}</span>
+              <Card key={item.id} tint={tint} className="flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Badge
+                        label={item.sourceCategory}
+                        variant={item.sourceCategory === 'ADMINISTRATION' ? 'sage' : 'jade'}
+                      />
+                      {item.isVerifiedByAdmin && (
+                        <Badge label="Verified by Administration" variant="jade" icon={ShieldCheck} />
+                      )}
+                      {item.priority === 'URGENT' && (
+                        <Badge label="Urgent" variant="blush" />
+                      )}
+                    </div>
+                    <span className="text-[10px] text-campus-textDim">
+                      {dayjs(item.createdAt).format('MMM D, YYYY')}
                     </span>
-
-                    {/* Verified by Administration badge — strictly if isVerifiedByAdmin is true */}
-                    {item.isVerifiedByAdmin && (
-                      <span className="inline-flex items-center space-x-1 text-[10px] font-semibold text-campus-jade-700 bg-campus-jade-50 px-2.5 py-0.5 rounded-full border border-campus-jade-200">
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Verified by Administration</span>
-                      </span>
-                    )}
-
-                    {isHighPriority && (
-                      <span className="text-[10px] font-bold text-campus-alert-red bg-campus-alert-redBg px-2 py-0.5 rounded-full border border-campus-alert-redBorder">
-                        {item.priority}
-                      </span>
-                    )}
                   </div>
 
-                  <span className="text-[11px] text-campus-textDim">
-                    {dayjs(item.createdAt).format('MMMM D, YYYY')}
-                  </span>
+                  <h3 className="text-sm font-medium text-campus-text mb-1.5 leading-snug">
+                    {item.title}
+                  </h3>
+                  <p className="text-xs text-campus-textMuted leading-relaxed whitespace-pre-line line-clamp-4">
+                    {item.content}
+                  </p>
                 </div>
 
-                <h2 className="text-sm font-bold text-campus-text mb-2 tracking-tight">
-                  {item.title}
-                </h2>
-
-                <p className="text-xs text-campus-textMuted leading-relaxed whitespace-pre-line mb-3">
-                  {item.content}
-                </p>
-
-                <div className="pt-2.5 border-t border-campus-borderSubtle flex items-center justify-between text-[11px] text-campus-textDim">
+                <div className="mt-4 pt-3 border-t border-black/5 flex items-center justify-between text-[11px] text-campus-textDim">
                   <span>Author: {item.author?.fullName}</span>
-                  {item.targetDepartment && (
-                    <span>Target: {item.targetDepartment}</span>
-                  )}
+                  {item.targetDepartment && <span>Dept: {item.targetDepartment}</span>}
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>

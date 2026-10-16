@@ -28,3 +28,8 @@
 1. Additive database migrations only; never edit old migrations.
 2. Secrets strictly in environment variables; zero hardcoded fallback credentials in production.
 3. Never run destructive seeds against production; baseline seeds must remain idempotent.
+
+## UI Kit
+- Shell: 72px left icon rail, floating rounded container on warm ivory, and 320px right info panel on dashboards.
+- Design tokens: `--card-tint-1` to `--card-tint-4` (soft sage, mint, warm sand, blush) with borderless 22px cards.
+- Shared components in `client/src/components/ui`: PageHeader, Chip, Card, Badge, Modal, EmptyState, LoadingSkeleton, StatCard, ProgressBar, MiniBarChart.
