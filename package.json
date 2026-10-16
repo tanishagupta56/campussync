@@ -13,7 +13,8 @@
     "dev:client": "npm --prefix client run dev",
     "db:start": "node server/start-db.js",
     "db:stop": "node server/stop-db.js",
-    "create-user": "npm --prefix server run create-user --"
+    "create-user": "npm --prefix server run create-user --",
+    "enroll-students": "npm --prefix server run enroll-students"
   },
   "keywords": [
     "campus",

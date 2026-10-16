@@ -120,8 +120,8 @@ export const AnnouncementsPage: React.FC = () => {
       ) : announcements.length === 0 ? (
         <EmptyState
           icon={Bell}
-          title="No notices found"
-          description="Try broadening your search keywords or switching filters."
+          title="No announcements yet"
+          description="There are currently no announcements matching your department or semester."
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

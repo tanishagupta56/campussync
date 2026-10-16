@@ -18,6 +18,7 @@
 ## Commands
 - Local: `npm run db:start && npm run dev:server` (backend) / `npm run dev:client` (frontend)
 - Provision Account: `npm run create-user -- <role> <email> <password> <name>`
+- Auto-Enroll Existing Students: `npm run enroll-students`
 - Render Build: `npm run build`
 - Render Start: `npm run start`
 - Render Seed: `npm run seed:base` (baseline accounts) / `npm run seed:demo` (sample posts)

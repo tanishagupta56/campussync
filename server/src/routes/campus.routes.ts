@@ -67,12 +67,49 @@ router.get('/announcements', requireAuth, async (req, res, next) => {
       ];
     }
     if (source && typeof source === 'string') where.sourceCategory = source;
+
     if (department && typeof department === 'string') {
       where.OR = [
         { targetDepartment: null },
         { targetDepartment: { contains: department, mode: 'insensitive' } },
       ];
+    } else if (req.user?.role === Role.STUDENT) {
+      // Show those targeted to everyone, plus those matching the student's branch/semester
+      const student = await prisma.studentProfile.findUnique({
+        where: { userId: req.user.id },
+      });
+      if (student) {
+        const branchVariants = [student.branch];
+        if (student.branch.toLowerCase().includes('computer')) {
+          branchVariants.push('CSE', 'Computer Science');
+        } else if (student.branch.toLowerCase().includes('mechanical')) {
+          branchVariants.push('ME', 'Mechanical');
+        } else if (student.branch.toLowerCase().includes('electrical')) {
+          branchVariants.push('EE', 'Electrical');
+        } else if (student.branch.toLowerCase().includes('civil')) {
+          branchVariants.push('CE', 'Civil');
+        }
+
+        where.AND = where.AND || [];
+        where.AND.push({
+          OR: [
+            { targetDepartment: null },
+            { targetDepartment: '' },
+            ...branchVariants.map((v) => ({ targetDepartment: { contains: v, mode: 'insensitive' as const } })),
+          ],
+        });
+
+        if (student.semester !== null && student.semester !== undefined) {
+          where.AND.push({
+            OR: [
+              { targetSemester: null },
+              { targetSemester: student.semester },
+            ],
+          });
+        }
+      }
     }
+
     const announcements = await prisma.announcement.findMany({
       where,
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
@@ -126,7 +163,7 @@ router.get('/events', requireAuth, async (req, res, next) => {
     const where: any = { isPublic: true };
     if (category && typeof category === 'string' && category !== 'ALL') where.category = category;
 
-    const events = await prisma.event.findMany({
+    const events: any[] = await prisma.event.findMany({
       where,
       orderBy: { startTime: 'asc' },
       include: {
@@ -134,6 +171,53 @@ router.get('/events', requireAuth, async (req, res, next) => {
         organizer: { select: { fullName: true, role: true } },
       },
     });
+
+    // For students: include scheduled academic lectures linked to enrolled subjects
+    if (req.user?.role === Role.STUDENT && (!category || category === 'ALL' || category === 'ACADEMIC')) {
+      const student = await prisma.studentProfile.findUnique({
+        where: { userId: req.user.id },
+      });
+      if (student) {
+        const slots = await prisma.timetableSlot.findMany({
+          where: {
+            subject: {
+              branch: student.branch,
+              semester: student.semester,
+            },
+          },
+          include: { subject: true },
+        });
+
+        const startOfWeek = dayjs().startOf('week'); // Sunday
+        for (const slot of slots) {
+          const slotDate = startOfWeek.add(slot.dayOfWeek, 'day');
+          const [startHour, startMin] = slot.startTime.split(':').map(Number);
+          const [endHour, endMin] = slot.endTime.split(':').map(Number);
+
+          const startDateTime = slotDate.hour(startHour).minute(startMin).second(0).toDate();
+          const endDateTime = slotDate.hour(endHour).minute(endMin).second(0).toDate();
+
+          events.push({
+            id: `timetable-${slot.id}-${slotDate.format('YYYYMMDD')}`,
+            title: `${slot.subject.code}: ${slot.subject.name}`,
+            description: `Scheduled academic lecture session for ${slot.subject.name}. Room: ${slot.room}${slot.subject.facultyName ? ` • Faculty: ${slot.subject.facultyName}` : ''}`,
+            category: 'ACADEMIC',
+            location: slot.room,
+            startTime: startDateTime,
+            endTime: endDateTime,
+            organizerId: req.user.id,
+            clubId: null,
+            isPublic: true,
+            createdAt: startDateTime,
+            updatedAt: startDateTime,
+            organizer: { fullName: slot.subject.facultyName || 'Academic Faculty', role: 'FACULTY' },
+          });
+        }
+
+        events.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      }
+    }
+
     res.json({ success: true, data: events });
   } catch (err) {
     next(err);
@@ -168,6 +252,47 @@ router.get('/deadlines', requireAuth, async (req, res, next) => {
     const { category } = req.query;
     const where: any = {};
     if (category && typeof category === 'string' && category !== 'ALL') where.category = category;
+
+    if (req.user?.role === Role.STUDENT) {
+      const student = await prisma.studentProfile.findUnique({
+        where: { userId: req.user.id },
+      });
+      if (student) {
+        const enrolledSubjects = await prisma.subject.findMany({
+          where: { branch: student.branch, semester: student.semester },
+          select: { code: true, name: true },
+        });
+        const subjectCodes = enrolledSubjects.map((s) => s.code);
+
+        const branchVariants = [student.branch];
+        if (student.branch.toLowerCase().includes('computer')) {
+          branchVariants.push('CSE', 'Computer Science');
+        } else if (student.branch.toLowerCase().includes('mechanical')) {
+          branchVariants.push('ME', 'Mechanical');
+        } else if (student.branch.toLowerCase().includes('electrical')) {
+          branchVariants.push('EE', 'Electrical');
+        }
+
+        const deadlineFilters: any[] = [
+          // General / all-campus deadlines
+          { department: null, semester: null },
+          // Branch / semester targeted deadlines
+          {
+            OR: branchVariants.map((v) => ({ department: { contains: v, mode: 'insensitive' as const } })),
+            ...(student.semester ? { OR: [{ semester: null }, { semester: student.semester }] } : {}),
+          },
+        ];
+
+        // Deadlines linked to enrolled subject codes
+        for (const code of subjectCodes) {
+          deadlineFilters.push({ title: { contains: code, mode: 'insensitive' as const } });
+          deadlineFilters.push({ description: { contains: code, mode: 'insensitive' as const } });
+        }
+
+        where.AND = where.AND || [];
+        where.AND.push({ OR: deadlineFilters });
+      }
+    }
 
     const deadlines = await prisma.deadline.findMany({
       where,

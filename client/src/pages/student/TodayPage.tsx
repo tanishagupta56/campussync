@@ -171,7 +171,7 @@ export const TodayPage: React.FC = () => {
       </Card>
 
       {/* Attendance Activity Mini Bar Chart */}
-      {attendance && attendance.subjects.length > 0 && (
+      {attendance && attendance.subjects.length > 0 ? (
         <Card tint="default" className="p-4">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs font-semibold text-campus-text">Attendance activity</span>
@@ -186,6 +186,14 @@ export const TodayPage: React.FC = () => {
             }))}
             targetValue={80}
           />
+        </Card>
+      ) : (
+        <Card tint="default" className="p-4 text-center">
+          <span className="text-xs font-semibold text-campus-text block mb-1">Attendance activity</span>
+          <p className="text-[11px] text-campus-textMuted">No attendance recorded yet.</p>
+          <Link to="/attendance" className="inline-block mt-2 text-[11px] font-semibold text-campus-jade-700 hover:underline">
+            Mark attendance &rarr;
+          </Link>
         </Card>
       )}
 
@@ -314,49 +322,59 @@ export const TodayPage: React.FC = () => {
                   Important Announcements
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {announcements.map((item, idx) => {
-                    const tints: ('tint-1' | 'tint-2' | 'tint-3')[] = ['tint-1', 'tint-2', 'tint-3'];
-                    const tint = tints[idx % tints.length];
-                    return (
-                      <Card key={item.id} tint={tint} className="flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <Badge
-                              label={item.sourceCategory}
-                              variant={item.sourceCategory === 'ADMINISTRATION' ? 'sage' : 'jade'}
-                            />
-                            {item.isVerifiedByAdmin ? (
-                              <Badge label="Verified" variant="jade" icon={ShieldCheck} />
-                            ) : (
-                              <span className="text-[10px] text-campus-textDim">
-                                {dayjs(item.createdAt).format('MMM D')}
-                              </span>
-                            )}
+                {announcements.length === 0 ? (
+                  <Card tint="default" className="p-6 text-center">
+                    <EmptyState
+                      icon={Bell}
+                      title="No announcements yet"
+                      description="You are all caught up! Announcements from administration and your department will appear here."
+                    />
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {announcements.map((item, idx) => {
+                      const tints: ('tint-1' | 'tint-2' | 'tint-3')[] = ['tint-1', 'tint-2', 'tint-3'];
+                      const tint = tints[idx % tints.length];
+                      return (
+                        <Card key={item.id} tint={tint} className="flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <Badge
+                                label={item.sourceCategory}
+                                variant={item.sourceCategory === 'ADMINISTRATION' ? 'sage' : 'jade'}
+                              />
+                              {item.isVerifiedByAdmin ? (
+                                <Badge label="Verified" variant="jade" icon={ShieldCheck} />
+                              ) : (
+                                <span className="text-[10px] text-campus-textDim">
+                                  {dayjs(item.createdAt).format('MMM D')}
+                                </span>
+                              )}
+                            </div>
+
+                            <h3 className="text-sm font-medium text-campus-text mb-1 leading-snug">
+                              {item.title}
+                            </h3>
+                            <p className="text-xs text-campus-textMuted line-clamp-2 leading-relaxed">
+                              {item.content}
+                            </p>
                           </div>
 
-                          <h3 className="text-sm font-medium text-campus-text mb-1 leading-snug">
-                            {item.title}
-                          </h3>
-                          <p className="text-xs text-campus-textMuted line-clamp-2 leading-relaxed">
-                            {item.content}
-                          </p>
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-black/5 flex items-center justify-between text-[11px] text-campus-textDim">
-                          <span>{dayjs(item.createdAt).format('D MMMM YYYY')}</span>
-                          <Link
-                            to="/announcements"
-                            className="font-medium text-campus-jade-700 hover:underline flex items-center gap-0.5"
-                          >
-                            <span>Read</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </Link>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
+                          <div className="mt-4 pt-3 border-t border-black/5 flex items-center justify-between text-[11px] text-campus-textDim">
+                            <span>{dayjs(item.createdAt).format('D MMMM YYYY')}</span>
+                            <Link
+                              to="/announcements"
+                              className="font-medium text-campus-jade-700 hover:underline flex items-center gap-0.5"
+                            >
+                              <span>Read</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </Link>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -367,44 +385,54 @@ export const TodayPage: React.FC = () => {
                   Upcoming Deadlines & Sessions
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {deadlines.map((dl) => {
-                    const daysLeft = dayjs(dl.dueDate).diff(dayjs(), 'day');
-                    const isUrgent = daysLeft <= 2;
-                    return (
-                      <Card key={dl.id} tint={isUrgent ? 'tint-4' : 'tint-3'}>
+                {deadlines.length === 0 && events.length === 0 ? (
+                  <Card tint="default" className="p-6 text-center">
+                    <EmptyState
+                      icon={Clock}
+                      title="No upcoming deadlines or sessions"
+                      description="You have no pending deadlines or scheduled lecture sessions for your enrolled subjects."
+                    />
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {deadlines.map((dl) => {
+                      const daysLeft = dayjs(dl.dueDate).diff(dayjs(), 'day');
+                      const isUrgent = daysLeft <= 2;
+                      return (
+                        <Card key={dl.id} tint={isUrgent ? 'tint-4' : 'tint-3'}>
+                          <div className="flex items-center justify-between mb-2">
+                            <Badge label={dl.category} variant="neutral" />
+                            <Badge
+                              label={daysLeft <= 0 ? 'Due Today' : `${daysLeft}d left`}
+                              variant={isUrgent ? 'blush' : 'amber'}
+                            />
+                          </div>
+                          <h4 className="text-sm font-medium text-campus-text mb-1">{dl.title}</h4>
+                          <div className="text-[11px] text-campus-textDim flex items-center gap-1.5 mt-2">
+                            <Clock className="w-3 h-3 text-campus-jade-700" />
+                            <span>Due {dayjs(dl.dueDate).format('ddd, D MMM • h:mm A')}</span>
+                          </div>
+                        </Card>
+                      );
+                    })}
+
+                    {events.map((ev) => (
+                      <Card key={ev.id} tint="tint-2">
                         <div className="flex items-center justify-between mb-2">
-                          <Badge label={dl.category} variant="neutral" />
-                          <Badge
-                            label={daysLeft <= 0 ? 'Due Today' : `${daysLeft}d left`}
-                            variant={isUrgent ? 'blush' : 'amber'}
-                          />
+                          <Badge label={ev.club?.name || ev.category} variant="jade" />
+                          <span className="text-[10px] text-campus-textDim">
+                            {dayjs(ev.startTime).format('MMM D')}
+                          </span>
                         </div>
-                        <h4 className="text-sm font-medium text-campus-text mb-1">{dl.title}</h4>
+                        <h4 className="text-sm font-medium text-campus-text mb-1">{ev.title}</h4>
                         <div className="text-[11px] text-campus-textDim flex items-center gap-1.5 mt-2">
-                          <Clock className="w-3 h-3 text-campus-jade-700" />
-                          <span>Due {dayjs(dl.dueDate).format('ddd, D MMM • h:mm A')}</span>
+                          <CalendarIcon className="w-3 h-3 text-campus-jade-700" />
+                          <span>{ev.location} &bull; {dayjs(ev.startTime).format('h:mm A')}</span>
                         </div>
                       </Card>
-                    );
-                  })}
-
-                  {events.map((ev) => (
-                    <Card key={ev.id} tint="tint-2">
-                      <div className="flex items-center justify-between mb-2">
-                        <Badge label={ev.club?.name || ev.category} variant="jade" />
-                        <span className="text-[10px] text-campus-textDim">
-                          {dayjs(ev.startTime).format('MMM D')}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-medium text-campus-text mb-1">{ev.title}</h4>
-                      <div className="text-[11px] text-campus-textDim flex items-center gap-1.5 mt-2">
-                        <CalendarIcon className="w-3 h-3 text-campus-jade-700" />
-                        <span>{ev.location} &bull; {dayjs(ev.startTime).format('h:mm A')}</span>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

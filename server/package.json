@@ -15,6 +15,7 @@
     "seed:demo": "tsx prisma/seed-demo.ts",
     "test:auth": "tsx tests/auth.test.ts",
     "create-user": "tsx src/scripts/create-user.ts",
+    "enroll-students": "tsx src/scripts/enroll-students.ts",
     "db:start": "node start-db.js",
     "db:stop": "node stop-db.js"
   },

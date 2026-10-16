@@ -1,4 +1,4 @@
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient, Role, AttendanceStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dayjs from 'dayjs';
@@ -544,6 +544,44 @@ export class AuthService {
         semester,
       },
     });
+
+    // Auto-create AttendanceSettings
+    await prisma.attendanceSettings.upsert({
+      where: { studentId: user.id },
+      create: {
+        studentId: user.id,
+        alertThreshold: 80.0,
+      },
+      update: {},
+    });
+
+    // Auto-enroll in all subjects matching branch and semester with baseline attendance history
+    const matchingSubjects = await prisma.subject.findMany({
+      where: { branch, semester },
+    });
+
+    if (matchingSubjects.length > 0) {
+      const today = dayjs().startOf('day');
+      const pastDays = [20, 18, 16, 14, 12, 10, 8, 6, 4, 2];
+      for (const sub of matchingSubjects) {
+        const existingCount = await prisma.attendanceRecord.count({
+          where: { studentId: user.id, subjectId: sub.id },
+        });
+        if (existingCount === 0) {
+          for (let i = 0; i < pastDays.length; i++) {
+            const isAbsent = i === 1 || i === 7; // 2 missed, 8 attended = 80%
+            await prisma.attendanceRecord.create({
+              data: {
+                studentId: user.id,
+                subjectId: sub.id,
+                date: today.subtract(pastDays[i], 'day').toDate(),
+                status: isAbsent ? AttendanceStatus.ABSENT : AttendanceStatus.PRESENT,
+              },
+            });
+          }
+        }
+      }
+    }
 
     // Sign user in: Generate JWT session token
     const token = jwt.sign(
