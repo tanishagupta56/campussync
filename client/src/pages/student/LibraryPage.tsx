@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../../lib/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Book, RefreshCw, Plus, Minus, Clock, ShieldCheck, Users } from 'lucide-react';
+import { PageHeader, Card, Badge, StatCard, ProgressBar, LoadingSkeleton } from '../../components/ui';
+import { Book, RefreshCw, Plus, Minus, Clock, ShieldCheck } from 'lucide-react';
 import dayjs from 'dayjs';
 
 interface LibraryData {
@@ -57,17 +58,11 @@ export const LibraryPage: React.FC = () => {
     }
   }
 
-  const occupancyColor =
-    !data ? 'text-campus-jade-700' :
-    data.occupancyPercentage > 85 ? 'text-campus-alert-red' :
-    data.occupancyPercentage > 60 ? 'text-campus-alert-amber' :
-    'text-campus-jade-700';
-
-  const barColor =
-    !data ? 'bg-campus-jade-700' :
-    data.occupancyPercentage > 85 ? 'bg-campus-alert-red' :
-    data.occupancyPercentage > 60 ? 'bg-campus-alert-amber' :
-    'bg-campus-jade-700';
+  const occupancyVariant: 'jade' | 'amber' | 'blush' =
+    !data ? 'jade' :
+    data.occupancyPercentage > 85 ? 'blush' :
+    data.occupancyPercentage > 60 ? 'amber' :
+    'jade';
 
   const stateBadge =
     !data ? 'Normal' :
@@ -76,106 +71,103 @@ export const LibraryPage: React.FC = () => {
     'Plenty Available';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-campus-border gap-2">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-campus-text">Central University Library</h1>
-          <p className="text-xs text-campus-textMuted mt-0.5">Live reading hall occupancy and desk availability monitor.</p>
-        </div>
-        <button
-          onClick={loadLibrary}
-          className="self-start md:self-auto px-3 py-1.5 border border-campus-border rounded-lg text-xs text-campus-textMuted hover:text-campus-text flex items-center space-x-1.5 hover:bg-campus-surface transition-colors"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
-        </button>
-      </div>
+    <div className="py-2 space-y-6">
+      <PageHeader
+        title="Central University Library"
+        subtitle="Live reading hall occupancy and desk availability monitor."
+        actions={
+          <button
+            type="button"
+            onClick={loadLibrary}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-campus-textMuted hover:text-campus-text shadow-xs transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        }
+      />
 
       {loading && !data ? (
-        <div className="py-20 flex flex-col items-center justify-center space-y-2">
-          <RefreshCw className="w-6 h-6 text-campus-jade-700 animate-spin" />
-          <span className="text-xs text-campus-textMuted">Reading sensor telemetry...</span>
-        </div>
+        <LoadingSkeleton rows={3} />
       ) : data ? (
         <div className="space-y-6">
-          {/* Main Status Hero */}
-          <div className="bg-campus-card border border-campus-border rounded-xl p-6 shadow-card">
+          {/* Main Status Hero Card */}
+          <Card tint="tint-1" className="p-6 md:p-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-campus-sage-100 text-campus-jade-700 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-white/80 text-campus-jade-700 rounded-2xl shadow-xs">
                   <Book className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-campus-text">{data.name}</h2>
-                  <div className="flex items-center space-x-2 text-xs text-campus-textDim mt-0.5">
+                  <h2 className="text-base font-medium text-campus-text">{data.name}</h2>
+                  <div className="flex items-center gap-1.5 text-xs text-campus-textDim mt-0.5">
                     <Clock className="w-3.5 h-3.5" />
                     <span>Last updated {dayjs(data.lastUpdated).format('h:mm:ss A')}</span>
                   </div>
                 </div>
               </div>
 
-              <span className={`self-start sm:self-auto text-xs font-bold px-3 py-1 rounded-full border ${
-                data.occupancyPercentage > 85 ? 'bg-campus-alert-redBg text-campus-alert-red border-campus-alert-redBorder' :
-                data.occupancyPercentage > 60 ? 'bg-campus-alert-amberBg text-campus-alert-amber border-campus-alert-amberBorder' :
-                'bg-campus-jade-50 text-campus-jade-700 border-campus-jade-200'
-              }`}>
-                {stateBadge}
-              </span>
+              <div className="self-start sm:self-auto">
+                <Badge label={stateBadge} variant={occupancyVariant} />
+              </div>
             </div>
 
-            {/* Three Primary Counters */}
+            {/* Three Primary Stat Counters */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-              <div className="p-4 bg-campus-surface rounded-xl border border-campus-borderSubtle">
-                <span className="text-xs text-campus-textDim uppercase font-semibold">Available Seats</span>
-                <p className="text-3xl font-extrabold text-campus-jade-700 mt-1">{data.available}</p>
-                <span className="text-[11px] text-campus-textMuted mt-1 block">Ready for study</span>
-              </div>
-              <div className="p-4 bg-campus-surface rounded-xl border border-campus-borderSubtle">
-                <span className="text-xs text-campus-textDim uppercase font-semibold">Currently Occupied</span>
-                <p className={`text-3xl font-extrabold mt-1 ${occupancyColor}`}>{data.occupied}</p>
-                <span className="text-[11px] text-campus-textMuted mt-1 block">Students inside</span>
-              </div>
-              <div className="p-4 bg-campus-surface rounded-xl border border-campus-borderSubtle">
-                <span className="text-xs text-campus-textDim uppercase font-semibold">Total Capacity</span>
-                <p className="text-3xl font-extrabold text-campus-text mt-1">{data.capacity}</p>
-                <span className="text-[11px] text-campus-textMuted mt-1 block">Maximum reading desks</span>
-              </div>
+              <StatCard
+                label="Available Seats"
+                value={data.available}
+                subtext="Ready for study"
+                tint="default"
+              />
+              <StatCard
+                label="Currently Occupied"
+                value={data.occupied}
+                subtext="Students inside reading hall"
+                tint="default"
+              />
+              <StatCard
+                label="Total Capacity"
+                value={data.capacity}
+                subtext="Maximum reading desks"
+                tint="default"
+              />
             </div>
 
-            {/* Occupancy bar */}
-            <div>
-              <div className="flex justify-between text-xs font-semibold mb-2">
-                <span className="text-campus-textMuted">Hall Density</span>
-                <span className={occupancyColor}>{data.occupancyPercentage}% Occupied</span>
-              </div>
-              <div className="w-full bg-campus-borderSubtle h-3 rounded-full overflow-hidden">
-                <div className={`h-full transition-all duration-300 ${barColor}`} style={{ width: `${data.occupancyPercentage}%` }} />
-              </div>
+            {/* Hall Density Progress Bar */}
+            <div className="bg-white/80 p-4 rounded-[18px]">
+              <ProgressBar
+                percentage={data.occupancyPercentage}
+                label="Reading Hall Density"
+                variant={occupancyVariant}
+              />
             </div>
 
-            {/* Administrator Only Controls */}
+            {/* Administrator Gate Controls */}
             {isAdmin && (
-              <div className="mt-6 pt-5 border-t border-campus-borderSubtle bg-campus-sage-50 -mx-6 -mb-6 p-6 rounded-b-xl">
-                <div className="flex items-center space-x-2 text-xs font-bold text-campus-jade-900 mb-2">
+              <div className="mt-6 pt-5 border-t border-black/5">
+                <div className="flex items-center gap-2 text-xs font-semibold text-campus-text mb-1">
                   <ShieldCheck className="w-4 h-4 text-campus-jade-700" />
                   <span>Administrator Gate Turnstile Controls</span>
                 </div>
                 <p className="text-xs text-campus-textMuted mb-3">
-                  Authorized gate operator controls. Non-administrators cannot see or invoke these endpoints (enforced with 403 checks).
+                  Authorized gate operator controls. Enforced with server-side permission checks.
                 </p>
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center gap-3">
                   <button
+                    type="button"
                     disabled={updating || data.occupied <= 0}
                     onClick={() => updateOccupancy(-1)}
-                    className="px-4 py-2 bg-white border border-campus-border rounded-lg text-xs font-semibold text-campus-text hover:bg-campus-surface flex items-center space-x-1.5 disabled:opacity-50"
+                    className="px-4 py-2 bg-white rounded-full text-xs font-medium text-campus-text hover:bg-campus-surface shadow-xs flex items-center gap-1.5 disabled:opacity-50 transition-colors"
                   >
                     <Minus className="w-4 h-4" />
                     <span>Student Exit (-1)</span>
                   </button>
                   <button
+                    type="button"
                     disabled={updating || data.occupied >= data.capacity}
                     onClick={() => updateOccupancy(1)}
-                    className="px-4 py-2 bg-campus-jade-700 rounded-lg text-xs font-semibold text-white hover:bg-campus-jade-800 flex items-center space-x-1.5 disabled:opacity-50"
+                    className="px-4 py-2 bg-campus-text text-white rounded-full text-xs font-medium hover:bg-black shadow-xs flex items-center gap-1.5 disabled:opacity-50 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Student Entry (+1)</span>
@@ -183,7 +175,7 @@ export const LibraryPage: React.FC = () => {
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         </div>
       ) : null}
     </div>

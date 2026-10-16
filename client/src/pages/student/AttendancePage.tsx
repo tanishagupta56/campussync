@@ -1,15 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../../lib/apiClient';
 import { useToast } from '../../context/ToastContext';
+import { PageHeader, Card, Badge, Chip, ProgressBar, LoadingSkeleton } from '../../components/ui';
 import {
   CalendarCheck,
   CheckCircle2,
   XCircle,
-  Clock,
-  AlertTriangle,
-  RefreshCw,
-  ChevronLeft,
-  ChevronRight,
   Info,
 } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -122,72 +118,65 @@ export const AttendancePage: React.FC = () => {
   });
 
   const overall = summary?.overallPercentage ?? 100;
-  const overallBadgeColor =
-    overall >= 80 ? 'text-campus-jade-700 bg-campus-jade-50 border-campus-jade-200' :
-    overall >= 75 ? 'text-campus-alert-amber bg-campus-alert-amberBg border-campus-alert-amberBorder' :
-    'text-campus-alert-red bg-campus-alert-redBg border-campus-alert-redBorder';
+  const overallBadgeVariant: 'jade' | 'amber' | 'blush' =
+    overall >= 80 ? 'jade' :
+    overall >= 75 ? 'amber' :
+    'blush';
 
   return (
-    <div className="space-y-6">
-      {/* Header with Overall Attendance Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-campus-border gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-campus-text">Attendance Tracker</h1>
-          <p className="text-xs text-campus-textMuted mt-0.5">
-            Personal self-reported tracking against the minimum 80% university attendance policy.
-          </p>
-        </div>
-
-        {summary && (
-          <div className={`px-4 py-2 rounded-xl border flex items-center space-x-3 self-start md:self-auto ${overallBadgeColor}`}>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider block">Overall Attendance</span>
-              <span className="text-xl font-extrabold">{summary.overallPercentage}%</span>
+    <div className="py-2 space-y-6">
+      {/* Header with Overall Attendance Pill */}
+      <PageHeader
+        title="Attendance Tracker"
+        subtitle="Personal self-reported tracking against the minimum 80% university attendance policy."
+        actions={
+          summary ? (
+            <div className="flex items-center gap-3 bg-white/80 px-4 py-2 rounded-2xl shadow-xs">
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-campus-textDim block">
+                  Overall
+                </span>
+                <span className="text-xl font-light tracking-tight text-campus-text">
+                  {summary.overallPercentage}%
+                </span>
+              </div>
+              <div className="text-[11px] text-campus-textMuted border-l border-black/5 pl-3">
+                {summary.attendedClassesOverall} / {summary.totalClassesOverall} Attended
+              </div>
             </div>
-            <div className="text-[11px] font-medium opacity-80 border-l pl-3">
-              {summary.attendedClassesOverall} / {summary.totalClassesOverall} Attended
-            </div>
-          </div>
-        )}
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* Notice Banner */}
-      <div className="p-3 bg-campus-surface border border-campus-border rounded-xl flex items-center space-x-2.5 text-xs text-campus-textMuted">
+      <Card tint="tint-1" className="p-3.5 flex items-center gap-2.5 text-xs text-campus-textMuted">
         <Info className="w-4 h-4 text-campus-jade-700 flex-shrink-0" />
         <span>Attendance is self-reported and for personal tracking.</span>
-      </div>
+      </Card>
 
-      {/* Date Switcher (Past 7 Days allowed, future rejected) */}
-      <div className="bg-campus-card border border-campus-border rounded-xl p-3 shadow-card flex items-center space-x-2 overflow-x-auto">
-        <span className="text-xs font-semibold text-campus-textDim whitespace-nowrap pl-1 pr-2">Date:</span>
+      {/* Date Switcher Chips (Past 7 Days allowed, future rejected) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <span className="text-xs font-medium text-campus-textDim whitespace-nowrap pl-1 pr-1">Date:</span>
         {pastDays.map((d) => (
-          <button
+          <Chip
             key={d.formatted}
+            label={d.display}
+            active={selectedDate === d.formatted}
             onClick={() => setSelectedDate(d.formatted)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-              selectedDate === d.formatted
-                ? 'bg-campus-jade-700 text-white font-semibold shadow-xs'
-                : 'text-campus-textMuted hover:bg-campus-surface hover:text-campus-text'
-            }`}
-          >
-            {d.display}
-          </button>
+          />
         ))}
       </div>
 
       {loading ? (
-        <div className="py-20 flex flex-col items-center justify-center space-y-2">
-          <RefreshCw className="w-6 h-6 text-campus-jade-700 animate-spin" />
-          <span className="text-xs text-campus-textMuted">Computing attendance records...</span>
-        </div>
+        <LoadingSkeleton rows={4} />
       ) : (
         <div className="space-y-6">
           {/* Today's Classes Timetable Card */}
-          <div className="bg-campus-card border border-campus-border rounded-xl p-5 shadow-card">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2">
+          <Card tint="default" className="p-5 md:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
                 <CalendarCheck className="w-4 h-4 text-campus-jade-700" />
-                <h2 className="text-sm font-bold text-campus-text">
+                <h2 className="text-sm font-medium text-campus-text">
                   Classes on {dayjs(selectedDate).format('dddd, D MMMM YYYY')}
                 </h2>
               </div>
@@ -197,7 +186,7 @@ export const AttendancePage: React.FC = () => {
             </div>
 
             {classes.length === 0 ? (
-              <p className="text-xs text-campus-textMuted py-4 text-center">
+              <p className="text-xs text-campus-textMuted py-6 text-center">
                 No scheduled lectures for this weekday.
               </p>
             ) : (
@@ -209,28 +198,28 @@ export const AttendancePage: React.FC = () => {
                   return (
                     <div
                       key={cls.slotId}
-                      className="p-3.5 bg-campus-surface rounded-xl border border-campus-borderSubtle flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      className="p-4 bg-campus-surface rounded-[18px] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
                       <div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs font-bold text-campus-jade-700">{cls.code}</span>
-                          <span className="text-xs text-campus-textDim">&bull;</span>
-                          <span className="text-xs font-semibold text-campus-text">{cls.name}</span>
+                        <div className="flex items-center gap-2">
+                          <Badge label={cls.code} variant="sage" />
+                          <span className="text-xs font-medium text-campus-text">{cls.name}</span>
                         </div>
-                        <div className="text-[11px] text-campus-textDim mt-0.5">
-                          {cls.startTime} - {cls.endTime} &bull; Room {cls.room} {cls.facultyName ? `&bull; ${cls.facultyName}` : ''}
+                        <div className="text-[11px] text-campus-textDim mt-1">
+                          {cls.startTime} - {cls.endTime} • Room {cls.room} {cls.facultyName ? `• ${cls.facultyName}` : ''}
                         </div>
                       </div>
 
                       {/* Attended / Missed Buttons */}
-                      <div className="flex items-center space-x-2 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <button
+                          type="button"
                           disabled={markingId === cls.subjectId}
                           onClick={() => handleMarkAttendance(cls.subjectId, 'PRESENT')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors ${
+                          className={`px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors shadow-xs ${
                             isPresent
-                              ? 'bg-campus-jade-700 text-white shadow-xs'
-                              : 'bg-white border border-campus-border text-campus-text hover:bg-campus-jade-50 hover:text-campus-jade-700'
+                              ? 'bg-campus-text text-white'
+                              : 'bg-white text-campus-text hover:bg-campus-jade-50 hover:text-campus-jade-700'
                           }`}
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -238,12 +227,13 @@ export const AttendancePage: React.FC = () => {
                         </button>
 
                         <button
+                          type="button"
                           disabled={markingId === cls.subjectId}
                           onClick={() => handleMarkAttendance(cls.subjectId, 'ABSENT')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors ${
+                          className={`px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors shadow-xs ${
                             isAbsent
-                              ? 'bg-campus-alert-red text-white shadow-xs'
-                              : 'bg-white border border-campus-border text-campus-text hover:bg-campus-alert-redBg hover:text-campus-alert-red'
+                              ? 'bg-campus-alert-red text-white'
+                              : 'bg-white text-campus-text hover:bg-campus-alert-redBg hover:text-campus-alert-red'
                           }`}
                         >
                           <XCircle className="w-3.5 h-3.5" />
@@ -255,68 +245,52 @@ export const AttendancePage: React.FC = () => {
                 })}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Per-Subject Status Cards */}
           <div>
-            <h2 className="text-sm font-bold text-campus-text mb-3">Enrolled Course Breakdown</h2>
+            <h2 className="text-sm font-medium text-campus-text mb-3 px-1">Enrolled Course Breakdown</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {summary?.subjects.map((sub) => {
+              {summary?.subjects.map((sub, idx) => {
                 const isSafe = sub.percentage >= 80;
                 const isBorderline = sub.percentage >= 75 && sub.percentage < 80;
 
-                const cardColor =
-                  isSafe ? 'border-campus-border' :
-                  isBorderline ? 'border-campus-alert-amberBorder bg-campus-alert-amberBg/20' :
-                  'border-campus-alert-redBorder bg-campus-alert-redBg/30';
-
-                const progressColor =
-                  isSafe ? 'bg-campus-jade-700' :
-                  isBorderline ? 'bg-campus-alert-amber' :
-                  'bg-campus-alert-red';
+                const cardTint = isSafe ? 'tint-1' : isBorderline ? 'tint-3' : 'tint-4';
+                const statusVariant: 'jade' | 'amber' | 'blush' = isSafe ? 'jade' : isBorderline ? 'amber' : 'blush';
 
                 return (
-                  <div
+                  <Card
                     key={sub.id}
-                    className={`p-5 bg-campus-card rounded-xl border shadow-card flex flex-col justify-between ${cardColor}`}
+                    tint={cardTint}
+                    className="flex flex-col justify-between"
                   >
                     <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-campus-sage-100 text-campus-sage-900">
-                          {sub.code}
-                        </span>
-                        <span
-                          className={`text-sm font-extrabold ${
-                            isSafe ? 'text-campus-jade-700' :
-                            isBorderline ? 'text-campus-alert-amber' :
-                            'text-campus-alert-red'
-                          }`}
-                        >
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge label={sub.code} variant="sage" />
+                        <span className="text-base font-light tracking-tight text-campus-text">
                           {sub.percentage}%
                         </span>
                       </div>
 
-                      <h3 className="text-xs font-bold text-campus-text mb-0.5">{sub.name}</h3>
+                      <h3 className="text-xs font-medium text-campus-text mb-0.5">{sub.name}</h3>
                       <p className="text-[11px] text-campus-textDim mb-3">
-                        {sub.attended} of {sub.total} classes attended {sub.facultyName ? `&bull; ${sub.facultyName}` : ''}
+                        {sub.attended} of {sub.total} classes attended {sub.facultyName ? `• ${sub.facultyName}` : ''}
                       </p>
 
                       {/* Progress Bar */}
-                      <div className="w-full bg-campus-borderSubtle h-2 rounded-full overflow-hidden mb-3">
-                        <div
-                          className={`h-full transition-all duration-300 ${progressColor}`}
-                          style={{ width: `${Math.min(100, sub.percentage)}%` }}
-                        />
-                      </div>
+                      <ProgressBar
+                        percentage={sub.percentage}
+                        variant={statusVariant}
+                      />
                     </div>
 
-                    <div className="pt-2.5 border-t border-campus-borderSubtle flex items-center justify-between text-xs">
-                      <span className={`text-[11px] font-semibold ${isSafe ? 'text-campus-jade-700' : 'text-campus-alert-red'}`}>
+                    <div className="mt-4 pt-2.5 border-t border-black/5 flex items-center justify-between text-xs">
+                      <span className={`text-[11px] font-medium ${isSafe ? 'text-campus-jade-700' : 'text-campus-alert-red'}`}>
                         {sub.statusText}
                       </span>
                       <span className="text-[10px] text-campus-textDim">Target: 80%</span>
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>
