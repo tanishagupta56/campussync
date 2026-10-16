@@ -2,14 +2,17 @@
 
 ## Built Features
 - Auth (OTP challenge, role check, session tokens) & Role-based routes
-- Student: Today, Announcements, Calendar, Deadlines, Attendance, Library, Lost & Found, Connect
-- Admin Console: Notices CRUD, event creation, deadline post, gate turnstiles
-- Express unified server serving Vite client bundle with API fallback
+- Student Pages: Today, Announcements, Calendar, Deadlines, Attendance, Library, Lost & Found, Connect
+- Admin Area: Announcements CRUD, Event & Deadline creation, Library gate turnstiles
+
+## Partly Built Features
+- Database schemas & seed models exist for: Opportunities, Scholarships, Clubs, Campus Issues
+- Placeholder component exists for unmounted pages (`PlaceholderPage.tsx`)
 
 ## Not Built Yet
-- Opportunities, Scholarships, Clubs, CampusSync AI assistant
+- Student Pages: Scholarships, Opportunities, Clubs, CampusSync AI
 - Faculty and Club Core dashboards
-- Production email delivery (uses dev console/demo banner)
+- Production email delivery (uses dev console / demo banner)
 - Three.js 3D library visualization
 
 ## Commands
