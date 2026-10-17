@@ -28,5 +28,5 @@ export const config = {
   emailFrom: process.env.EMAIL_FROM || 'noreply@campus.edu',
   openaiApiKey: process.env.OPENAI_API_KEY || '',
   isProduction,
-  devShowOtp: process.env.DEV_SHOW_OTP === 'true' && !isProduction,
+  devShowOtp: process.env.DEV_SHOW_OTP === 'true',
 };

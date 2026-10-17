@@ -16,6 +16,10 @@ export async function sendOtpEmail({
   otp,
   role,
 }: SendOtpEmailParams): Promise<{ success: boolean; method: string }> {
+  // Demo accounts (@campus.edu): skip email when DEV_SHOW_OTP is on; the code is shown on the login page
+  if (config.devShowOtp && toEmail.toLowerCase().endsWith('@campus.edu')) {
+    return { success: true, method: 'demo' };
+  }
   // If an email API key is configured, send via Resend
   if (config.emailApiKey && resend) {
     try {
