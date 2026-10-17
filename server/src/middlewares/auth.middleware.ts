@@ -47,7 +47,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     };
 
     req.user = {
-      id: payload.userId,
+      id: payload.userId ?? (payload as any).id,
       email: payload.email,
       role: payload.role,
     };
