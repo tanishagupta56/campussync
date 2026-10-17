@@ -22,12 +22,19 @@ interface SubjectSummary {
   statusText: string;
   canMissCount: number;
   mustAttendCount: number;
+  plannedTotal?: number;
+  requiredToPass?: number;
+  remaining?: number;
+  reachable?: boolean;
+  status?: 'SAFE' | 'ON_TRACK' | 'AT_RISK' | 'UNREACHABLE';
 }
 
 interface AttendanceSummary {
   overallPercentage: number;
   totalClassesOverall: number;
   attendedClassesOverall: number;
+  targetPercentage?: number;
+  plannedPerSubject?: number;
   subjects: SubjectSummary[];
   alerts: any[];
 }
@@ -54,6 +61,10 @@ export const AttendancePage: React.FC = () => {
 
   // Selected date for attendance logging (default today, limited to past 7 days)
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
+
+  // Attendance rules come from the server (defaults: 75% of 35 classes)
+  const target = summary?.targetPercentage ?? 75;
+  const planned = summary?.plannedPerSubject ?? 35;
 
   async function loadData(dateToFetch = selectedDate) {
     try {
@@ -97,7 +108,7 @@ export const AttendancePage: React.FC = () => {
       );
 
       if (res.triggeredAlert) {
-        showToast(res.alertMessage || 'Warning: Attendance dropped below 80%!', 'warning');
+        showToast(res.alertMessage || `Warning: Attendance is below ${target}%!`, 'warning');
       } else {
         showToast(`Marked ${status === 'PRESENT' ? 'Attended' : 'Missed'} for ${selectedDate}`, 'success');
       }
@@ -117,18 +128,13 @@ export const AttendancePage: React.FC = () => {
     };
   });
 
-  const overall = summary?.overallPercentage ?? 100;
-  const overallBadgeVariant: 'jade' | 'amber' | 'blush' =
-    overall >= 80 ? 'jade' :
-    overall >= 75 ? 'amber' :
-    'blush';
 
   return (
     <div className="py-2 space-y-6">
       {/* Header with Overall Attendance Pill */}
       <PageHeader
         title="Attendance Tracker"
-        subtitle="Personal self-reported tracking against the minimum 80% university attendance policy."
+        subtitle={`Personal self-reported tracking against the minimum ${target}% attendance requirement (${planned} classes per subject).`}
         actions={
           summary ? (
             <div className="flex items-center gap-3 bg-white/80 px-4 py-2 rounded-2xl shadow-xs">
@@ -252,11 +258,13 @@ export const AttendancePage: React.FC = () => {
             <h2 className="text-sm font-medium text-campus-text mb-3 px-1">Enrolled Course Breakdown</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {summary?.subjects.map((sub, idx) => {
-                const isSafe = sub.percentage >= 80;
-                const isBorderline = sub.percentage >= 75 && sub.percentage < 80;
+                // Status comes from the server: SAFE / ON_TRACK (green), AT_RISK (amber), UNREACHABLE (red)
+                const status = sub.status ?? (sub.percentage >= target ? 'ON_TRACK' : 'AT_RISK');
+                const isSafe = status === 'SAFE' || status === 'ON_TRACK';
+                const isAtRisk = status === 'AT_RISK';
 
-                const cardTint = isSafe ? 'tint-1' : isBorderline ? 'tint-3' : 'tint-4';
-                const statusVariant: 'jade' | 'amber' | 'blush' = isSafe ? 'jade' : isBorderline ? 'amber' : 'blush';
+                const cardTint = isSafe ? 'tint-1' : isAtRisk ? 'tint-3' : 'tint-4';
+                const statusVariant: 'jade' | 'amber' | 'blush' = isSafe ? 'jade' : isAtRisk ? 'amber' : 'blush';
 
                 return (
                   <Card
@@ -273,9 +281,15 @@ export const AttendancePage: React.FC = () => {
                       </div>
 
                       <h3 className="text-xs font-medium text-campus-text mb-0.5">{sub.name}</h3>
-                      <p className="text-[11px] text-campus-textDim mb-3">
-                        {sub.attended} of {sub.total} classes attended {sub.facultyName ? `• ${sub.facultyName}` : ''}
+                      <p className="text-[11px] text-campus-textDim">
+                        {sub.attended} of {sub.total} classes held so far attended {sub.facultyName ? `• ${sub.facultyName}` : ''}
                       </p>
+                      {sub.requiredToPass !== undefined && (
+                        <p className="text-[11px] text-campus-textDim mb-3">
+                          Need {sub.requiredToPass} of {sub.plannedTotal} classes for {target}% • {sub.remaining} classes left
+                        </p>
+                      )}
+                      {sub.requiredToPass === undefined && <div className="mb-3" />}
 
                       {/* Progress Bar */}
                       <ProgressBar
@@ -288,7 +302,7 @@ export const AttendancePage: React.FC = () => {
                       <span className={`text-[11px] font-medium ${isSafe ? 'text-campus-jade-700' : 'text-campus-alert-red'}`}>
                         {sub.statusText}
                       </span>
-                      <span className="text-[10px] text-campus-textDim">Target: 80%</span>
+                      <span className="text-[10px] text-campus-textDim whitespace-nowrap pl-2">Target: {target}%</span>
                     </div>
                   </Card>
                 );

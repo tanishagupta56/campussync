@@ -6,6 +6,60 @@ import dayjs from 'dayjs';
 const router = Router();
 const prisma = new PrismaClient();
 
+// ---------------------------------------------------------------------------
+// Attendance rules (can be changed on Render without editing code):
+//   CLASSES_PER_SUBJECT  total classes planned per subject in a semester (default 35)
+//   ATTENDANCE_TARGET    minimum attendance percentage required (default 75)
+// ---------------------------------------------------------------------------
+const PLANNED_CLASSES = Number(process.env.CLASSES_PER_SUBJECT) || 35;
+const TARGET_PERCENT = Number(process.env.ATTENDANCE_TARGET) || 75;
+
+type AttendanceStatusLabel = 'SAFE' | 'ON_TRACK' | 'AT_RISK' | 'UNREACHABLE';
+
+const classes = (n: number) => `${n} class${n === 1 ? '' : 'es'}`;
+
+// Pure calculation for one subject.
+// "held" = classes marked so far (attended + missed). Percentage is based on
+// classes held so far, NOT on the full semester, so 10 of 10 shows as 100%.
+export function computeSubjectAttendance(attended: number, held: number) {
+  const plannedTotal = Math.max(PLANNED_CLASSES, held);
+  // Integer maths first to avoid floating-point rounding (75 * 35 / 100 = 26.25 -> 27)
+  const requiredToPass = Math.ceil((TARGET_PERCENT * plannedTotal) / 100);
+  const remaining = plannedTotal - held;
+  const needMore = Math.max(0, requiredToPass - attended);
+  const reachable = needMore <= remaining;
+  const canStillMiss = reachable ? remaining - needMore : 0;
+  const percentage = held > 0 ? Math.round((attended / held) * 100) : 100;
+
+  let status: AttendanceStatusLabel;
+  let statusText: string;
+  if (needMore === 0) {
+    status = 'SAFE';
+    statusText = `Target reached: ${attended} of ${requiredToPass} required classes attended`;
+  } else if (!reachable) {
+    status = 'UNREACHABLE';
+    statusText = `${TARGET_PERCENT}% no longer reachable: ${needMore} needed but only ${classes(remaining)} left`;
+  } else if (percentage >= TARGET_PERCENT) {
+    status = 'ON_TRACK';
+    statusText = `Attend ${needMore} of the remaining ${classes(remaining)} · can miss ${canStillMiss} more`;
+  } else {
+    status = 'AT_RISK';
+    statusText = `Attend ${needMore} of the remaining ${classes(remaining)} to reach ${TARGET_PERCENT}% · can miss ${canStillMiss} more`;
+  }
+
+  return {
+    percentage,
+    plannedTotal,
+    requiredToPass,
+    remaining,
+    needMore,
+    canStillMiss,
+    reachable,
+    status,
+    statusText,
+  };
+}
+
 // Helper to calculate student summary & percentages on server
 async function calculateStudentAttendanceSummary(studentId: string, branch: string, semester: number) {
   const subjects = await prisma.subject.findMany({
@@ -24,26 +78,11 @@ async function calculateStudentAttendanceSummary(studentId: string, branch: stri
   const subjectStats = subjects.map((sub) => {
     const total = sub.attendanceRecords.length;
     const attended = sub.attendanceRecords.filter((r) => r.status === AttendanceStatus.PRESENT).length;
-    const percentage = total > 0 ? Math.round((attended / total) * 100) : 100;
 
     totalClassesOverall += total;
     attendedClassesOverall += attended;
 
-    // Calculate how many more classes can be missed to stay at or above 80% (0.8 * (total + X) <= attended)
-    // or how many consecutive classes must be attended to reach 80%
-    let canMissOrNeed = 0;
-    let statusText = '';
-    if (percentage >= 80) {
-      // can miss: attended / (total + M) >= 0.8 => M <= (attended / 0.8) - total
-      const canMiss = Math.floor(attended / 0.8 - total);
-      canMissOrNeed = Math.max(0, canMiss);
-      statusText = canMissOrNeed === 0 ? 'On the edge (cannot miss next class)' : `Can miss ${canMissOrNeed} more class${canMissOrNeed > 1 ? 'es' : ''}`;
-    } else {
-      // need to attend: (attended + N) / (total + N) >= 0.8 => attended + N >= 0.8*total + 0.8*N => 0.2*N >= 0.8*total - attended
-      const need = Math.ceil((0.8 * total - attended) / 0.2);
-      canMissOrNeed = Math.max(1, need);
-      statusText = `Must attend next ${canMissOrNeed} class${canMissOrNeed > 1 ? 'es' : ''} to reach 80%`;
-    }
+    const calc = computeSubjectAttendance(attended, total);
 
     return {
       id: sub.id,
@@ -53,10 +92,15 @@ async function calculateStudentAttendanceSummary(studentId: string, branch: stri
       facultyName: sub.facultyName,
       attended,
       total,
-      percentage,
-      statusText,
-      canMissCount: percentage >= 80 ? canMissOrNeed : 0,
-      mustAttendCount: percentage < 80 ? canMissOrNeed : 0,
+      percentage: calc.percentage,
+      statusText: calc.statusText,
+      canMissCount: calc.canStillMiss,
+      mustAttendCount: calc.needMore,
+      plannedTotal: calc.plannedTotal,
+      requiredToPass: calc.requiredToPass,
+      remaining: calc.remaining,
+      reachable: calc.reachable,
+      status: calc.status,
     };
   });
 
@@ -67,6 +111,8 @@ async function calculateStudentAttendanceSummary(studentId: string, branch: stri
     overallPercentage,
     totalClassesOverall,
     attendedClassesOverall,
+    targetPercentage: TARGET_PERCENT,
+    plannedPerSubject: PLANNED_CLASSES,
     subjects: subjectStats,
   };
 }
@@ -79,7 +125,7 @@ router.get('/attendance/summary', requireAuth, async (req, res, next) => {
 
     const summary = await calculateStudentAttendanceSummary(req.user!.id, student.branch, student.semester);
 
-    // Active attendance alert (below 80%)
+    // Active attendance alerts (subjects at risk or no longer reachable)
     const activeAlerts = await prisma.attendanceAlert.findMany({
       where: {
         studentId: req.user!.id,
@@ -212,19 +258,20 @@ router.put('/attendance', requireAuth, async (req, res, next) => {
       },
     });
 
-    // Re-calculate subject attendance to check 80% threshold crossing
+    // Re-calculate this subject to check whether it is now at risk
     const subjectRecords = await prisma.attendanceRecord.findMany({
       where: { studentId: req.user!.id, subjectId },
     });
     const total = subjectRecords.length;
     const attended = subjectRecords.filter((r) => r.status === AttendanceStatus.PRESENT).length;
-    const percentage = total > 0 ? (attended / total) * 100 : 100;
+    const calc = computeSubjectAttendance(attended, total);
+    const isRisky = calc.status === 'AT_RISK' || calc.status === 'UNREACHABLE';
 
     let triggeredAlert = false;
     let alertMessage = '';
 
-    // Trigger alert ONLY once per crossing below threshold
-    if (percentage < 80.0) {
+    // Trigger alert ONLY once per crossing into "at risk"
+    if (isRisky) {
       const existingAlert = await prisma.attendanceAlert.findFirst({
         where: {
           studentId: req.user!.id,
@@ -239,16 +286,18 @@ router.put('/attendance', requireAuth, async (req, res, next) => {
           data: {
             studentId: req.user!.id,
             subjectId,
-            threshold: 80.0,
-            percentageAtAlert: Math.round(percentage),
+            threshold: TARGET_PERCENT,
+            percentageAtAlert: calc.percentage,
             sentAt: new Date(),
           },
         });
         triggeredAlert = true;
-        alertMessage = `Warning: Attendance in ${subject?.name || 'Subject'} dropped below 80% (${Math.round(percentage)}%)`;
+        alertMessage = calc.reachable
+          ? `Warning: ${subject?.name || 'Subject'} is below ${TARGET_PERCENT}% (${calc.percentage}%). Attend ${calc.needMore} of the remaining ${classes(calc.remaining)}.`
+          : `Warning: ${TARGET_PERCENT}% is no longer reachable in ${subject?.name || 'Subject'}.`;
       }
     } else {
-      // Student recovered above 80%, resolve prior alerts so future drop can re-alert
+      // Student is back on track: resolve prior alerts so a future drop can re-alert
       await prisma.attendanceAlert.updateMany({
         where: {
           studentId: req.user!.id,
