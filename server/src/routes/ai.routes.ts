@@ -8,6 +8,17 @@ import dayjs from 'dayjs';
 const router = Router();
 const prisma = new PrismaClient();
 
+// ---------------------------------------------------------------------------
+// AI provider settings (set on Render; no code change needed to switch):
+//   AI_API_KEY   provider key, e.g. a Groq key (gsk_...). Falls back to OPENAI_API_KEY.
+//   AI_BASE_URL  OpenAI-compatible API address, e.g. https://api.groq.com/openai/v1
+//   AI_MODEL     model name, e.g. llama-3.3-70b-versatile
+// ---------------------------------------------------------------------------
+const AI_API_KEY = process.env.AI_API_KEY || config.openaiApiKey || '';
+const AI_BASE_URL = (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+const AI_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+const ATTENDANCE_TARGET = Number(process.env.ATTENDANCE_TARGET) || 75;
+
 interface SourceCard {
   type: 'DEADLINE' | 'EVENT' | 'SCHOLARSHIP' | 'LIBRARY' | 'CLUB' | 'MENTOR' | 'ATTENDANCE' | 'ISSUE';
   title: string;
@@ -103,7 +114,7 @@ router.post('/chat', requireAuth, aiChatRateLimiter, async (req, res, next) => {
             type: 'ATTENDANCE',
             title: `${sub.code}: ${sub.name}`,
             detail: `${sAtt}/${sTotal} attended (${sPct}%)`,
-            meta: sPct < 80 ? 'Below 80% threshold' : 'Compliant',
+            meta: sPct < ATTENDANCE_TARGET ? `Below ${ATTENDANCE_TARGET}% threshold` : 'Compliant',
           });
           contextSnippets.push(`Student's attendance in ${sub.code} (${sub.name}) is ${sPct}% (${sAtt}/${sTotal} classes attended).`);
         }
@@ -180,45 +191,50 @@ router.post('/chat', requireAuth, aiChatRateLimiter, async (req, res, next) => {
 
     let answer = '';
 
-    // LLM Phrasing or Rule-Based Fallback
-    if (contextSnippets.length === 0) {
-      answer = `I could not find any active campus database records matching your query "${query}". Please check your query keywords or ask about library seating, upcoming deadlines, scheduled events, scholarships, student clubs, or your personal attendance records.`;
-    } else if (config.openaiApiKey) {
-      // Optional OpenAI phrasing on server
+    // LLM phrasing (Groq / OpenAI / any OpenAI-compatible provider) with rule-based fallback
+    if (AI_API_KEY) {
+      const hasRecords = contextSnippets.length > 0;
+      const systemPrompt = hasRecords
+        ? 'You are CampusSync AI, the university campus assistant. Answer the student query concisely and strictly using the retrieved campus database records provided below. Never invent details or deadlines not present in the records. If information is not found in the records, explicitly say so.'
+        : 'You are CampusSync AI, a friendly university campus assistant. No campus database records matched this question. You may give brief, general study or student-life guidance, but never invent campus-specific facts such as dates, deadlines, names, numbers or seat counts. For campus-specific questions, suggest asking about library seating, deadlines, events, scholarships, clubs, mentors or attendance.';
+      const userContent = hasRecords
+        ? `Retrieved Campus Database Context:\n${contextSnippets.join('\n')}\n\nStudent Query: "${query}"`
+        : `Student Query: "${query}"`;
+
       try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetch(`${AI_BASE_URL}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${config.openaiApiKey}`,
+            Authorization: `Bearer ${AI_API_KEY}`,
           },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
+            model: AI_MODEL,
             messages: [
-              {
-                role: 'system',
-                content: 'You are CampusSync AI, the university campus assistant. Answer the student query concisely and strictly using the retrieved campus database records provided below. Never invent details or deadlines not present in the records. If information is not found in the records, explicitly say so.',
-              },
-              {
-                role: 'user',
-                content: `Retrieved Campus Database Context:\n${contextSnippets.join('\n')}\n\nStudent Query: "${query}"`,
-              },
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userContent },
             ],
             temperature: 0.2,
-            max_tokens: 300,
+            max_tokens: 400,
           }),
         });
 
         if (response.ok) {
           const data = await response.json();
           answer = (data as any).choices?.[0]?.message?.content || '';
+        } else {
+          // Log status only (never the key) so problems are visible in Render logs
+          console.error(`[AI] Provider returned HTTP ${response.status} (model: ${AI_MODEL}, base: ${AI_BASE_URL})`);
         }
-      } catch (err) {
-        // Fall back gracefully to rule-based summary
+      } catch (err: any) {
+        console.error('[AI] Provider request failed:', err?.message || 'unknown error');
       }
     }
 
-    // Fallback if OpenAI key is not set or failed
+    // Fallback when no key is set, the provider failed, or nothing matched
+    if (!answer && contextSnippets.length === 0) {
+      answer = `I could not find any active campus database records matching your query "${query}". Please check your query keywords or ask about library seating, upcoming deadlines, scheduled events, scholarships, student clubs, or your personal attendance records.`;
+    }
     if (!answer && contextSnippets.length > 0) {
       answer = `Here is what I found in the campus records regarding your query:\n\n` +
         contextSnippets.map((s, idx) => `${idx + 1}. ${s}`).join('\n\n') +
