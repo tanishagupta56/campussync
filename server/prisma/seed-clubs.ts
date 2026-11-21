@@ -12,10 +12,11 @@ async function main() {
   // 1. Ensure Robotics Club Lead User exists
   const roboticsLead = await prisma.user.upsert({
     where: { email: 'robotics.lead@campus.edu' },
-    update: { role: Role.CLUB_CORE },
+    update: { role: Role.CLUB_CORE, passwordHash: clubLeadPw, isEmailVerified: true },
     create: {
       email: 'robotics.lead@campus.edu',
       passwordHash: clubLeadPw,
+      isEmailVerified: true,
       fullName: 'Aaditya Nair',
       role: Role.CLUB_CORE,
       phone: '+91 98765 99001',
