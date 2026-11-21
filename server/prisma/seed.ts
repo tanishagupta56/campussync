@@ -1,4 +1,3 @@
-
 import { PrismaClient, Role, AttendanceStatus, AnnouncementPriority, AnnouncementSource, EventCategory, DeadlineCategory, IssueCategory, IssueStatus, OpportunityCategory } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import dayjs from 'dayjs';
@@ -48,7 +47,7 @@ async function main() {
       isEmailVerified: true,
       fullName: 'Aarav Sharma',
       role: Role.STUDENT,
-      phone: '+91 98765 43210,
+      phone: '+91 98765 43210',
       studentProfile: {
         create: {
           collegeId: '2025CSE0104',
