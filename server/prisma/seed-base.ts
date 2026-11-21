@@ -41,7 +41,7 @@ async function main() {
     create: {
       email: 'admin@campus.edu',
       passwordHash: adminPw,
-      isEmailVer/ified: true,
+      isEmailVerified: true,
       fullName: 'Campus Administrator',
       role: Role.ADMINISTRATOR,
       phone: '+91 98765 43230',
