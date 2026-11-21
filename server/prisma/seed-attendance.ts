@@ -1,3 +1,4 @@
+
 import { PrismaClient, Role, AttendanceStatus, AnnouncementPriority, AnnouncementSource, EventCategory, DeadlineCategory } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import dayjs from 'dayjs';
@@ -21,6 +22,7 @@ async function main() {
       data: {
         email: 'aarav.sharma@campus.edu',
         passwordHash: studentPw,
+        isEmailVerified: true,
         fullName: 'Aarav Sharma',
         role: Role.STUDENT,
         studentProfile: {
