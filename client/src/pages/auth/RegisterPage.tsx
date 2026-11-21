@@ -166,7 +166,10 @@ export const RegisterPage: React.FC = () => {
     setIsResending(true);
     setErrorMessage(null);
     try {
-      await resendOtp(challenge.challengeId);
+      const resent = await resendOtp(challenge.challengeId); 
+      // Show the NEW demo code on screen (the old one is no longer valid)
+      setChallenge({ ...challenge, devOtp: resent.devOtp });       
+      setOtp('');
       setResendCooldown(60);
       showToast('A fresh verification code has been sent.', 'info', 'Code Resent');
     } catch (err: any) {
