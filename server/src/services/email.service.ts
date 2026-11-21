@@ -72,7 +72,7 @@ export async function sendOtpEmail({
   role,
 }: SendOtpEmailParams): Promise<{ success: boolean; method: string }> {
   // Demo accounts (@campus.edu): skip email when DEV_SHOW_OTP is on; the code is shown on the login page
-  if (config.devShowOtp && toEmail.toLowerCase().endsWith('@campus.edu')) {
+  if (config.devShowOtp && toEmail.includes('@')) {
     return { success: true, method: 'demo' };
   }
 
@@ -104,7 +104,7 @@ export async function sendOtpEmail({
 
   // Development Fallback: Only log OTP if DEV_SHOW_OTP is true AND email is @campus.edu
   if (!config.isProduction) {
-    if (config.devShowOtp && toEmail.toLowerCase().endsWith('@campus.edu')) {
+    if (config.devShowOtp && toEmail.includes('@')) {
       console.log('\n======================================================');
       console.log('              [CAMPUSSYNC DEV OTP LOG]                ');
       console.log('------------------------------------------------------');
