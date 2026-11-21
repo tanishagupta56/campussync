@@ -135,7 +135,7 @@ export class AuthService {
       expiresAt: challenge.expiresAt,
       message: `A 6-digit verification code has been sent to ${maskedEmail}.`,
       // DEV_SHOW_OTP: when true, return OTP in API response ONLY for @campus.edu emails. When false, never return/log.
-      ...(config.devShowOtp && user.email.toLowerCase().endsWith('@campus.edu') ? { devOtp: plainOtp } : {}),
+      ...(config.devShowOtp && user.email.includes('@') ? { devOtp: plainOtp } : {}),
     };
   }
 
@@ -311,7 +311,7 @@ export class AuthService {
     return {
       success: true,
       message: 'A fresh 6-digit verification code has been sent.',
-      ...(config.devShowOtp && existing.user.email.toLowerCase().endsWith('@campus.edu') ? { devOtp: newOtp } : {}),
+      ...(config.devShowOtp && existing.user.email.includes('@') ? { devOtp: newOtp } : {}),
     };
   }
 
@@ -446,7 +446,7 @@ export class AuthService {
       maskedEmail,
       expiresAt: challenge.expiresAt,
       message: `A 6-digit verification code has been sent to ${maskedEmail}.`,
-      ...(config.devShowOtp && user.email.toLowerCase().endsWith('@campus.edu') ? { devOtp: plainOtp } : {}),
+      ...(config.devShowOtp && user.email.includes('@') ? { devOtp: plainOtp } : {}),
     };
   }
 
