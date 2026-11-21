@@ -9,7 +9,7 @@ interface AuthContextValue {
   isLoading: boolean;
   initiateLogin: (email: string, password: string, selectedRole: Role) => Promise<LoginChallenge>;
   verifyOtp: (challengeId: string, otp: string) => Promise<User>;
-  resendOtp: (challengeId: string) => Promise<void>;
+    resendOtp: (challengeId: string) => Promise<{ devOtp?: string }>;
   register: (params: { fullName: string; email: string; password: string; branch: string; semester: number }) => Promise<LoginChallenge>;
   verifyRegistration: (challengeId: string, otp: string) => Promise<User>;
   logout: () => Promise<void>;
@@ -71,13 +71,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data.user;
   };
 
-  const resendOtp = async (challengeId: string): Promise<void> => {
-    await apiRequest('/api/auth/resend-otp', {
+    const resendOtp = async (challengeId: string): Promise<{ devOtp?: string }> => {
+    const data = await apiRequest<{ devOtp?: string }>('/api/auth/resend-otp', {
       method: 'POST',
       body: JSON.stringify({ challengeId }),
     });
+    return data || {};
   };
-
   const register = async (params: { fullName: string; email: string; password: string; branch: string; semester: number }): Promise<LoginChallenge> => {
     const data = await apiRequest<LoginChallenge>('/api/auth/register', {
       method: 'POST',
