@@ -120,10 +120,10 @@ model StudentProfile {
   userId          String   @unique
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   collegeId       String   @unique
-  program         String   // e.g. "B.Tech"
-  branch          String   // e.g. "Computer Science & Engineering"
-  semester        Int      // 1 to 8
-  yearOfStudy     Int      // 1, 2, 3, 4
+  program         String?  @default("B.Tech") // e.g. "B.Tech"
+  branch          String?  // e.g. "Computer Science & Engineering"
+  semester        Int?     // 1 to 8
+  yearOfStudy     Int?     @default(1) // 1, 2, 3, 4
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -131,9 +131,9 @@ model StudentProfile {
 model Enrollment {
   id           String   @id @default(uuid())
   studentEmail String   @unique
-  program      String
-  branch       String
-  semester     Int
+  program      String?  @default("B.Tech")
+  branch       String?
+  semester     Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

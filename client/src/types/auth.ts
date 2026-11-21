@@ -3,10 +3,10 @@ export type Role = 'STUDENT' | 'FACULTY' | 'ADMINISTRATOR' | 'CLUB_CORE';
 export interface StudentProfile {
   id: string;
   collegeId: string;
-  program: string;
-  branch: string;
-  semester: number;
-  yearOfStudy: number;
+  program?: string | null;
+  branch?: string | null;
+  semester?: number | null;
+  yearOfStudy?: number | null;
 }
 
 export interface MentorProfile {

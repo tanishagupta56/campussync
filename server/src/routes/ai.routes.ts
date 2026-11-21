@@ -95,7 +95,7 @@ router.post('/chat', requireAuth, aiChatRateLimiter, async (req, res, next) => {
     // 4. Attendance (logged-in student's own attendance only)
     if (q.includes('attendance') || q.includes('bunk') || q.includes('miss') || q.includes('subject') || q.includes('threshold') || q.includes('class')) {
       const student = await prisma.studentProfile.findUnique({ where: { userId: studentId } });
-      if (student) {
+      if (student && student.branch && student.semester) {
         const subjects = await prisma.subject.findMany({
           where: { branch: student.branch, semester: student.semester },
           include: { attendanceRecords: { where: { studentId } } },
@@ -215,19 +215,25 @@ router.post('/chat', requireAuth, aiChatRateLimiter, async (req, res, next) => {
               { role: 'user', content: userContent },
             ],
             temperature: 0.2,
-            max_tokens: 400,
+            max_completion_tokens: 1024,
+            ...(AI_MODEL.includes('gpt-oss') ? { reasoning_effort: 'low' } : {}),
           }),
         });
 
         if (response.ok) {
           const data = await response.json();
-          answer = (data as any).choices?.[0]?.message?.content || '';
+          const choice = (data as any).choices?.[0];
+          const content = choice?.message?.content;
+          answer = typeof content === 'string' ? content.trim() : '';
+          if (!answer) {
+            console.error(`[AI] Provider returned an empty answer (model: ${AI_MODEL}, finish: ${choice?.finish_reason || 'unknown'})`);
+          }
         } else {
-          // Log status only (never the key) so problems are visible in Render logs
-          console.error(`[AI] Provider returned HTTP ${response.status} (model: ${AI_MODEL}, base: ${AI_BASE_URL})`);
+          const responseBody = await response.text();
+          console.error(`[AI] Provider returned HTTP ${response.status} (model: ${AI_MODEL}, base: ${AI_BASE_URL}) ${responseBody.slice(0, 300)}`);
         }
       } catch (err: any) {
-        console.error('[AI] Provider request failed:', err?.message || 'unknown error');
+        console.error('[AI] Provider request failed:', err.message);
       }
     }
 

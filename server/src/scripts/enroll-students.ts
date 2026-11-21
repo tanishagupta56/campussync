@@ -71,9 +71,11 @@ async function main() {
     });
 
     // 4. Find matching subjects for their branch and semester
-    const subjects = await prisma.subject.findMany({
-      where: { branch: profile.branch, semester: profile.semester },
-    });
+    const subjects = (profile.branch && profile.semester)
+      ? await prisma.subject.findMany({
+          where: { branch: profile.branch, semester: profile.semester },
+        })
+      : [];
 
     // 5. Seed baseline attendance records if missing
     const today = dayjs().startOf('day');

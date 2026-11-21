@@ -30,8 +30,8 @@ export interface RegisterUserParams {
   fullName: string;
   email: string;
   password: string;
-  branch: string;
-  semester: number;
+  branch?: string;
+  semester?: number;
   ipAddress?: string;
 }
 
@@ -334,12 +334,14 @@ export class AuthService {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // 2. Validate branch and semester options against Subject table
-    const subjectMatch = await prisma.subject.findFirst({
-      where: { branch, semester },
-    });
-    if (!subjectMatch) {
-      throw { status: 400, message: 'Invalid program branch or semester combination.' };
+    // 2. Validate branch and semester options against Subject table in the database only if provided
+    if (branch && semester) {
+      const subjectMatch = await prisma.subject.findFirst({
+        where: { branch, semester },
+      });
+      if (!subjectMatch) {
+        throw { status: 400, message: 'Invalid program branch or semester combination.' };
+      }
     }
 
     // 3. Check if user already exists
@@ -377,8 +379,8 @@ export class AuthService {
           passwordHash,
           role: Role.STUDENT,
           isEmailVerified: false,
-          registrationBranch: branch,
-          registrationSemester: semester,
+          registrationBranch: branch || null,
+          registrationSemester: semester ? Number(semester) : null,
         },
       });
     } else {
@@ -389,8 +391,8 @@ export class AuthService {
           passwordHash,
           role: Role.STUDENT,
           isEmailVerified: false,
-          registrationBranch: branch,
-          registrationSemester: semester,
+          registrationBranch: branch || null,
+          registrationSemester: semester ? Number(semester) : null,
         },
       });
     }
@@ -500,17 +502,15 @@ export class AuthService {
     });
 
     // Create StudentProfile & Enrollment
-    const branch = user.registrationBranch || 'Computer Science & Engineering';
-    const semester = user.registrationSemester || 1;
+    const branch = user.registrationBranch || null;
+    const semester = user.registrationSemester || null;
     const year = new Date().getFullYear();
-    const branchAbbr = branch.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 3) || 'CSE';
+    const branchAbbr = branch ? branch.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 3) : 'STU';
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const collegeId = `${year}${branchAbbr}${randomSuffix}`;
 
-    const subjectEntry = await prisma.subject.findFirst({
-      where: { branch, semester },
-    });
-    const program = subjectEntry?.program || 'B.Tech';
+    const program = 'B.Tech';
+    const yearOfStudy = semester ? Math.min(4, Math.max(1, Math.ceil(semester / 2))) : 1;
 
     const studentProfile = await prisma.studentProfile.upsert({
       where: { userId: user.id },
@@ -520,13 +520,11 @@ export class AuthService {
         program,
         branch,
         semester,
-        yearOfStudy: Math.min(4, Math.max(1, Math.ceil(semester / 2))),
+        yearOfStudy,
       },
       update: {
-        program,
-        branch,
-        semester,
-        yearOfStudy: Math.min(4, Math.max(1, Math.ceil(semester / 2))),
+        ...(branch ? { branch } : {}),
+        ...(semester ? { semester, yearOfStudy } : {}),
       },
     });
 
@@ -539,9 +537,8 @@ export class AuthService {
         semester,
       },
       update: {
-        program,
-        branch,
-        semester,
+        ...(branch ? { branch } : {}),
+        ...(semester ? { semester } : {}),
       },
     });
 
@@ -555,29 +552,31 @@ export class AuthService {
       update: {},
     });
 
-    // Auto-enroll in all subjects matching branch and semester with baseline attendance history
-    const matchingSubjects = await prisma.subject.findMany({
-      where: { branch, semester },
-    });
+    // Auto-enroll in all subjects matching branch and semester with baseline attendance history if branch & semester exist
+    if (branch && semester) {
+      const matchingSubjects = await prisma.subject.findMany({
+        where: { branch, semester },
+      });
 
-    if (matchingSubjects.length > 0) {
-      const today = dayjs().startOf('day');
-      const pastDays = [20, 18, 16, 14, 12, 10, 8, 6, 4, 2];
-      for (const sub of matchingSubjects) {
-        const existingCount = await prisma.attendanceRecord.count({
-          where: { studentId: user.id, subjectId: sub.id },
-        });
-        if (existingCount === 0) {
-          for (let i = 0; i < pastDays.length; i++) {
-            const isAbsent = i === 1 || i === 7; // 2 missed, 8 attended = 80%
-            await prisma.attendanceRecord.create({
-              data: {
-                studentId: user.id,
-                subjectId: sub.id,
-                date: today.subtract(pastDays[i], 'day').toDate(),
-                status: isAbsent ? AttendanceStatus.ABSENT : AttendanceStatus.PRESENT,
-              },
-            });
+      if (matchingSubjects.length > 0) {
+        const today = dayjs().startOf('day');
+        const pastDays = [20, 18, 16, 14, 12, 10, 8, 6, 4, 2];
+        for (const sub of matchingSubjects) {
+          const existingCount = await prisma.attendanceRecord.count({
+            where: { studentId: user.id, subjectId: sub.id },
+          });
+          if (existingCount === 0) {
+            for (let i = 0; i < pastDays.length; i++) {
+              const isAbsent = i === 1 || i === 7; // 2 missed, 8 attended = 80%
+              await prisma.attendanceRecord.create({
+                data: {
+                  studentId: user.id,
+                  subjectId: sub.id,
+                  date: today.subtract(pastDays[i], 'day').toDate(),
+                  status: isAbsent ? AttendanceStatus.ABSENT : AttendanceStatus.PRESENT,
+                },
+              });
+            }
           }
         }
       }

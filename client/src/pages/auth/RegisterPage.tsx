@@ -7,20 +7,12 @@ import {
   User as UserIcon,
   Mail,
   Lock,
-  BookOpen,
-  Calendar,
   ArrowRight,
   RefreshCw,
   KeyRound,
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
-
-interface ProgramMeta {
-  program: string;
-  branch: string;
-  semesters: number[];
-}
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -37,16 +29,10 @@ export const RegisterPage: React.FC = () => {
     }
   }, [user, role, navigate]);
 
-  // Programs metadata from Subject table
-  const [programs, setPrograms] = useState<ProgramMeta[]>([]);
-  const [loadingMeta, setLoadingMeta] = useState<boolean>(true);
-
   // Form State (no role selector)
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [branch, setBranch] = useState('');
-  const [semester, setSemester] = useState<number | ''>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -58,24 +44,7 @@ export const RegisterPage: React.FC = () => {
   const [isResending, setIsResending] = useState(false);
   const [devShowOtp, setDevShowOtp] = useState(false);
 
-  // Load programs metadata from GET /api/meta/programs and config
   useEffect(() => {
-    fetch('/api/meta/programs')
-      .then((r) => r.json())
-      .then((res) => {
-        if (res?.data?.programs && Array.isArray(res.data.programs)) {
-          setPrograms(res.data.programs);
-          if (res.data.programs.length > 0) {
-            setBranch(res.data.programs[0].branch);
-            if (res.data.programs[0].semesters.length > 0) {
-              setSemester(res.data.programs[0].semesters[0]);
-            }
-          }
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoadingMeta(false));
-
     fetch('/api/config')
       .then((r) => r.json())
       .then((res) => {
@@ -85,18 +54,6 @@ export const RegisterPage: React.FC = () => {
       })
       .catch(() => {});
   }, []);
-
-  // Update semester default when branch changes
-  const handleBranchChange = (newBranch: string) => {
-    setBranch(newBranch);
-    setErrorMessage(null);
-    const found = programs.find((p) => p.branch === newBranch);
-    if (found && found.semesters.length > 0) {
-      setSemester(found.semesters[0]);
-    } else {
-      setSemester('');
-    }
-  };
 
   // Resend cooldown timer
   useEffect(() => {
@@ -116,11 +73,6 @@ export const RegisterPage: React.FC = () => {
       return;
     }
 
-    if (!branch || !semester) {
-      setErrorMessage('Please select a valid branch and semester.');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -128,8 +80,6 @@ export const RegisterPage: React.FC = () => {
         fullName: fullName.trim(),
         email: email.trim(),
         password,
-        branch,
-        semester: Number(semester),
       });
 
       setChallenge(result);
@@ -176,8 +126,6 @@ export const RegisterPage: React.FC = () => {
       setIsResending(false);
     }
   };
-
-  const activeBranchData = programs.find((p) => p.branch === branch);
 
   return (
     <div className="min-h-screen bg-campus-bg flex flex-col justify-between selection:bg-campus-jade-100 selection:text-campus-jade-900">
@@ -291,70 +239,10 @@ export const RegisterPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Branch and Semester (fetched from Subject table) */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                <div className="sm:col-span-2">
-                  <label htmlFor="branch" className="block text-xs font-medium text-campus-text mb-1.5">
-                    Academic Branch
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-campus-textDim">
-                      <BookOpen className="w-4 h-4" />
-                    </div>
-                    <select
-                      id="branch"
-                      required
-                      value={branch}
-                      disabled={loadingMeta}
-                      onChange={(e) => handleBranchChange(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 bg-campus-surface border border-campus-border rounded-lg text-sm text-campus-text focus:bg-white focus:border-campus-jade-700 transition-colors"
-                    >
-                      {loadingMeta ? (
-                        <option value="">Loading branches...</option>
-                      ) : (
-                        programs.map((p) => (
-                          <option key={p.branch} value={p.branch}>
-                            {p.branch}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="semester" className="block text-xs font-medium text-campus-text mb-1.5">
-                    Semester
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-campus-textDim">
-                      <Calendar className="w-4 h-4" />
-                    </div>
-                    <select
-                      id="semester"
-                      required
-                      value={semester}
-                      disabled={loadingMeta || !activeBranchData}
-                      onChange={(e) => {
-                        setSemester(Number(e.target.value));
-                        setErrorMessage(null);
-                      }}
-                      className="w-full pl-9 pr-3 py-2.5 bg-campus-surface border border-campus-border rounded-lg text-sm text-campus-text focus:bg-white focus:border-campus-jade-700 transition-colors"
-                    >
-                      {activeBranchData?.semesters.map((sem) => (
-                        <option key={sem} value={sem}>
-                          Semester {sem}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isSubmitting || loadingMeta}
+                disabled={isSubmitting}
                 className="w-full mt-2 py-2.5 px-4 bg-campus-jade-700 hover:bg-campus-jade-800 disabled:opacity-60 text-white font-medium text-sm rounded-lg flex items-center justify-center space-x-2 transition-colors shadow-sm"
               >
                 {isSubmitting ? (

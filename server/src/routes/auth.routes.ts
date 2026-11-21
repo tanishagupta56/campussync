@@ -34,8 +34,8 @@ const registerSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters.'),
   email: z.string().email('Please enter a valid college email address.'),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
-  branch: z.string().min(1, 'Branch selection is required.'),
-  semester: z.number().int().min(1).max(8, 'Semester must be between 1 and 8.'),
+  branch: z.string().optional(),
+  semester: z.number().int().min(1).max(8).optional(),
 });
 
 const verifyRegistrationSchema = z.object({

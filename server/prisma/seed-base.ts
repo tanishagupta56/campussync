@@ -71,39 +71,25 @@ async function main() {
     },
   });
 
-  // Idempotent Subjects
-  const subjects = [
-    { code: 'CS301', name: 'Data Structures & Algorithms', credits: 4, facultyName: 'Dr. S. Ramanujan' },
-    { code: 'CS302', name: 'Computer Organization & Architecture', credits: 3, facultyName: 'Prof. Ananya Sen' },
-    { code: 'CS303', name: 'Database Management Systems', credits: 4, facultyName: 'Dr. Rajesh Kulkarni' },
-    { code: 'MA301', name: 'Discrete Mathematics', credits: 3, facultyName: 'Dr. Meenakshi Sundaram' },
-  ];
+  // Idempotent Subjects: seed comprehensive curriculum across all engineering branches and semesters 1 to 8
+  const { ensureFoundationalCurriculum } = await import('../src/db/curriculum');
+  await ensureFoundationalCurriculum(prisma);
 
-  for (const s of subjects) {
-    const sub = await prisma.subject.upsert({
-      where: { code: s.code },
-      update: { name: s.name, facultyName: s.facultyName },
-      create: {
-        code: s.code,
-        name: s.name,
-        program: 'B.Tech',
-        branch: 'Computer Science & Engineering',
-        semester: 3,
-        credits: s.credits,
-        facultyName: s.facultyName,
-      },
-    });
-
-    // Seed slots if missing
-    const count = await prisma.timetableSlot.count({ where: { subjectId: sub.id } });
-    if (count === 0) {
-      await prisma.timetableSlot.createMany({
-        data: [
-          { subjectId: sub.id, dayOfWeek: 1, startTime: '09:00', endTime: '10:00', room: 'LH-101' },
-          { subjectId: sub.id, dayOfWeek: 3, startTime: '10:15', endTime: '11:15', room: 'LH-101' },
-          { subjectId: sub.id, dayOfWeek: 5, startTime: '11:30', endTime: '12:30', room: 'LH-101' },
-        ],
-      });
+  // Seed sample timetable slots for core semester 3 subjects if missing
+  const coreCodes = ['CS301', 'CS302', 'CS303', 'MA301'];
+  for (const code of coreCodes) {
+    const sub = await prisma.subject.findUnique({ where: { code } });
+    if (sub) {
+      const count = await prisma.timetableSlot.count({ where: { subjectId: sub.id } });
+      if (count === 0) {
+        await prisma.timetableSlot.createMany({
+          data: [
+            { subjectId: sub.id, dayOfWeek: 1, startTime: '09:00', endTime: '10:00', room: 'LH-101' },
+            { subjectId: sub.id, dayOfWeek: 3, startTime: '10:15', endTime: '11:15', room: 'LH-101' },
+            { subjectId: sub.id, dayOfWeek: 5, startTime: '11:30', endTime: '12:30', room: 'LH-101' },
+          ],
+        });
+      }
     }
   }
 

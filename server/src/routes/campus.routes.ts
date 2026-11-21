@@ -18,9 +18,18 @@ router.get('/config', (req, res) => {
   });
 });
 
+import { ensureFoundationalCurriculum } from '../db/curriculum';
+
 // GET /api/meta/programs (public)
 router.get('/meta/programs', async (req, res, next) => {
   try {
+    // If the database has no subjects yet (e.g. freshly deployed to Render/Neon before seed),
+    // automatically initialize the foundational university curriculum in the database.
+    const subjectCount = await prisma.subject.count();
+    if (subjectCount === 0) {
+      await ensureFoundationalCurriculum(prisma);
+    }
+
     const subjects = await prisma.subject.findMany({
       select: { program: true, branch: true, semester: true },
       distinct: ['program', 'branch', 'semester'],
@@ -38,7 +47,7 @@ router.get('/meta/programs', async (req, res, next) => {
       }
     }
 
-    const programs = Array.from(branchMap.values()).map(b => ({
+    const programs = Array.from(branchMap.values()).map((b) => ({
       ...b,
       semesters: b.semesters.sort((a, b) => a - b),
     }));
@@ -78,7 +87,7 @@ router.get('/announcements', requireAuth, async (req, res, next) => {
       const student = await prisma.studentProfile.findUnique({
         where: { userId: req.user.id },
       });
-      if (student) {
+      if (student && student.branch) {
         const branchVariants = [student.branch];
         if (student.branch.toLowerCase().includes('computer')) {
           branchVariants.push('CSE', 'Computer Science');
@@ -177,7 +186,7 @@ router.get('/events', requireAuth, async (req, res, next) => {
       const student = await prisma.studentProfile.findUnique({
         where: { userId: req.user.id },
       });
-      if (student) {
+      if (student && student.branch && student.semester) {
         const slots = await prisma.timetableSlot.findMany({
           where: {
             subject: {
@@ -257,7 +266,7 @@ router.get('/deadlines', requireAuth, async (req, res, next) => {
       const student = await prisma.studentProfile.findUnique({
         where: { userId: req.user.id },
       });
-      if (student) {
+      if (student && student.branch && student.semester) {
         const enrolledSubjects = await prisma.subject.findMany({
           where: { branch: student.branch, semester: student.semester },
           select: { code: true, name: true },
@@ -513,7 +522,7 @@ router.get('/mentors', requireAuth, async (req, res, next) => {
 router.patch('/mentors/availability', requireAuth, async (req, res, next) => {
   try {
     const student = await prisma.studentProfile.findUnique({ where: { userId: req.user!.id } });
-    if (!student || student.yearOfStudy < 2) {
+    if (!student || (student.yearOfStudy ?? 0) < 2) {
       return res.status(403).json({
         error: 'Forbidden',
         message: 'Only students in Year 2 or above are eligible to mentor.',

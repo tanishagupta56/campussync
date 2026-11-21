@@ -10,7 +10,7 @@ interface AuthContextValue {
   initiateLogin: (email: string, password: string, selectedRole: Role) => Promise<LoginChallenge>;
   verifyOtp: (challengeId: string, otp: string) => Promise<User>;
   resendOtp: (challengeId: string) => Promise<void>;
-  register: (params: { fullName: string; email: string; password: string; branch: string; semester: number }) => Promise<LoginChallenge>;
+  register: (params: { fullName: string; email: string; password: string; branch?: string; semester?: number }) => Promise<LoginChallenge>;
   verifyRegistration: (challengeId: string, otp: string) => Promise<User>;
   logout: () => Promise<void>;
 }
@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const register = async (params: { fullName: string; email: string; password: string; branch: string; semester: number }): Promise<LoginChallenge> => {
+  const register = async (params: { fullName: string; email: string; password: string; branch?: string; semester?: number }): Promise<LoginChallenge> => {
     const data = await apiRequest<LoginChallenge>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(params),

@@ -61,7 +61,18 @@ export function computeSubjectAttendance(attended: number, held: number) {
 }
 
 // Helper to calculate student summary & percentages on server
-async function calculateStudentAttendanceSummary(studentId: string, branch: string, semester: number) {
+async function calculateStudentAttendanceSummary(studentId: string, branch?: string | null, semester?: number | null) {
+  if (!branch || !semester) {
+    return {
+      overallPercentage: 100,
+      totalClassesOverall: 0,
+      attendedClassesOverall: 0,
+      targetPercentage: TARGET_PERCENT,
+      plannedPerSubject: PLANNED_CLASSES,
+      subjectStats: [],
+    };
+  }
+
   const subjects = await prisma.subject.findMany({
     where: { branch, semester },
     include: {
@@ -164,19 +175,21 @@ router.get('/attendance/today', requireAuth, async (req, res, next) => {
     let dayOfWeek: number = targetDate.day();
     if (dayOfWeek === 0) dayOfWeek = 7;
 
-    const slots = await prisma.timetableSlot.findMany({
-      where: {
-        dayOfWeek,
-        subject: {
-          branch: student.branch,
-          semester: student.semester,
-        },
-      },
-      include: {
-        subject: true,
-      },
-      orderBy: { startTime: 'asc' },
-    });
+    const slots = (student.branch && student.semester)
+      ? await prisma.timetableSlot.findMany({
+          where: {
+            dayOfWeek,
+            subject: {
+              branch: student.branch,
+              semester: student.semester,
+            },
+          },
+          include: {
+            subject: true,
+          },
+          orderBy: { startTime: 'asc' },
+        })
+      : [];
 
     // Check existing records for student on targetDate
     const existingRecords = await prisma.attendanceRecord.findMany({
