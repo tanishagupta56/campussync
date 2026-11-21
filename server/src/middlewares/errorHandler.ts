@@ -15,6 +15,6 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
 
   res.status(status).json({
     error: err.name || 'Error',
-    message: status >= 500 ? 'An unexpected server error occurred.' : message,
+    message: status >= 500 && !err.expose ? 'An unexpected server error occurred.' : message,
   });
 }

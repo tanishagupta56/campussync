@@ -44,6 +44,7 @@ async function main() {
     data: {
       email: 'aarav.sharma@campus.edu',
       passwordHash: studentPw,
+      isEmailVerified: true,
       fullName: 'Aarav Sharma',
       role: Role.STUDENT,
       phone: '+91 98765 43210',
@@ -157,6 +158,7 @@ async function main() {
       data: {
         email: m.email,
         passwordHash: studentPw,
+        isEmailVerified: true,
         fullName: m.name,
         role: Role.STUDENT,
         phone: '+91 98765 11223',
@@ -189,6 +191,7 @@ async function main() {
     data: {
       email: 'admin@campus.edu',
       passwordHash: adminPw,
+      isEmailVerified: true,
       fullName: 'Campus Administrator',
       role: Role.ADMINISTRATOR,
       phone: '+91 98765 43230',
@@ -199,6 +202,7 @@ async function main() {
     data: {
       email: 'dr.ramanujan@campus.edu',
       passwordHash: facultyPw,
+      isEmailVerified: true,
       fullName: 'Dr. S. Ramanujan',
       role: Role.FACULTY,
     },

@@ -13,10 +13,11 @@ async function main() {
   // Idempotent Student: Aarav Sharma
   await prisma.user.upsert({
     where: { email: 'aarav.sharma@campus.edu' },
-    update: { fullName: 'Aarav Sharma' },
+    update: { fullName: 'Aarav Sharma', passwordHash: studentPw, isEmailVerified: true },
     create: {
       email: 'aarav.sharma@campus.edu',
       passwordHash: studentPw,
+      isEmailVerified: true,
       fullName: 'Aarav Sharma',
       role: Role.STUDENT,
       phone: '+91 98765 43210',
@@ -36,10 +37,11 @@ async function main() {
   // Idempotent Admin
   await prisma.user.upsert({
     where: { email: 'admin@campus.edu' },
-    update: { fullName: 'Campus Administrator' },
+    update: { fullName: 'Campus Administrator', passwordHash: adminPw, isEmailVerified: true },
     create: {
       email: 'admin@campus.edu',
       passwordHash: adminPw,
+      isEmailVerified: true,
       fullName: 'Campus Administrator',
       role: Role.ADMINISTRATOR,
       phone: '+91 98765 43230',
@@ -49,10 +51,11 @@ async function main() {
   // Idempotent Faculty
   await prisma.user.upsert({
     where: { email: 'dr.ramanujan@campus.edu' },
-    update: { fullName: 'Dr. S. Ramanujan' },
+    update: { fullName: 'Dr. S. Ramanujan', passwordHash: facultyPw, isEmailVerified: true },
     create: {
       email: 'dr.ramanujan@campus.edu',
       passwordHash: facultyPw,
+      isEmailVerified: true,
       fullName: 'Dr. S. Ramanujan',
       role: Role.FACULTY,
     },
