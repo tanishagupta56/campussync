@@ -1,1010 +1,260 @@
 import { Router } from 'express';
 import { PrismaClient, Role } from '@prisma/client';
 import { requireAuth } from '../middlewares/auth.middleware';
-import { requireRole } from '../middlewares/role.middleware';
-import dayjs from 'dayjs';
+import { aiChatRateLimiter } from '../middlewares/rateLimiter';
 import { config } from '../config/env';
+import dayjs from 'dayjs';
 
 const router = Router();
 import { prisma as sharedPrisma } from '../db/prisma';
 const prisma = sharedPrisma;
 
-// GET /api/config (public)
-router.get('/config', (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      devShowOtp: config.devShowOtp,
-    },
-  });
-});
+// ---------------------------------------------------------------------------
+// AI provider settings (set on Render; no code change needed to switch):
+//   AI_API_KEY   provider key, e.g. a Groq key (gsk_...). Falls back to OPENAI_API_KEY.
+//   AI_BASE_URL  OpenAI-compatible API address, e.g. https://api.groq.com/openai/v1
+//   AI_MODEL     model name, e.g. llama-3.3-70b-versatile
+// ---------------------------------------------------------------------------
+const AI_API_KEY = process.env.AI_API_KEY || config.openaiApiKey || '';
+const AI_BASE_URL = (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+const AI_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+const ATTENDANCE_TARGET = Number(process.env.ATTENDANCE_TARGET) || 75;
 
-import { ensureFoundationalCurriculum } from '../db/curriculum';
-
-// In-memory cache for the branch/semester list (changes rarely)
-let programsCache: { data: any; expires: number } | null = null;
-const PROGRAMS_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-// GET /api/meta/programs (public)
-router.get('/meta/programs', async (req, res, next) => {
-  try {
-    if (programsCache && programsCache.expires > Date.now()) {
-      res.setHeader('Cache-Control', 'public, max-age=300');
-      return res.json({ success: true, data: programsCache.data });
-    }
-
-    // If the database has no subjects yet (e.g. freshly deployed to Render/Neon before seed),
-    // automatically initialize the foundational university curriculum in the database.
-    const subjectCount = await prisma.subject.count();
-    if (subjectCount === 0) {
-      await ensureFoundationalCurriculum(prisma);
-    }
-
-    const subjects = await prisma.subject.findMany({
-      select: { program: true, branch: true, semester: true },
-      distinct: ['program', 'branch', 'semester'],
-      orderBy: [{ branch: 'asc' }, { semester: 'asc' }],
-    });
-
-    const branchMap = new Map<string, { program: string; branch: string; semesters: number[] }>();
-    for (const sub of subjects) {
-      if (!branchMap.has(sub.branch)) {
-        branchMap.set(sub.branch, { program: sub.program, branch: sub.branch, semesters: [] });
-      }
-      const item = branchMap.get(sub.branch)!;
-      if (!item.semesters.includes(sub.semester)) {
-        item.semesters.push(sub.semester);
-      }
-    }
-
-    const programs = Array.from(branchMap.values()).map((b) => ({
-      ...b,
-      semesters: b.semesters.sort((a, b) => a - b),
-    }));
-
-    const data = { programs, combinations: subjects };
-    programsCache = { data, expires: Date.now() + PROGRAMS_TTL_MS };
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// GET /api/announcements
-router.get('/announcements', requireAuth, async (req, res, next) => {
-  try {
-    const { search, source, department } = req.query;
-    const where: any = {};
-    if (search && typeof search === 'string') {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { content: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-    if (source && typeof source === 'string') where.sourceCategory = source;
-
-    if (department && typeof department === 'string') {
-      where.OR = [
-        { targetDepartment: null },
-        { targetDepartment: { contains: department, mode: 'insensitive' } },
-      ];
-    } else if (req.user?.role === Role.STUDENT) {
-      // Show those targeted to everyone, plus those matching the student's branch/semester
-      const student = await prisma.studentProfile.findUnique({
-        where: { userId: req.user.id },
-      });
-      if (student && student.branch) {
-        const branchVariants = [student.branch];
-        if (student.branch.toLowerCase().includes('computer')) {
-          branchVariants.push('CSE', 'Computer Science');
-        } else if (student.branch.toLowerCase().includes('mechanical')) {
-          branchVariants.push('ME', 'Mechanical');
-        } else if (student.branch.toLowerCase().includes('electrical')) {
-          branchVariants.push('EE', 'Electrical');
-        } else if (student.branch.toLowerCase().includes('civil')) {
-          branchVariants.push('CE', 'Civil');
-        }
-
-        where.AND = where.AND || [];
-        where.AND.push({
-          OR: [
-            { targetDepartment: null },
-            { targetDepartment: '' },
-            ...branchVariants.map((v) => ({ targetDepartment: { contains: v, mode: 'insensitive' as const } })),
-          ],
-        });
-
-        if (student.semester !== null && student.semester !== undefined) {
-          where.AND.push({
-            OR: [
-              { targetSemester: null },
-              { targetSemester: student.semester },
-            ],
-          });
-        }
-      }
-    }
-
-    const announcements = await prisma.announcement.findMany({
-      where,
-      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
-      include: { author: { select: { id: true, fullName: true, role: true } } },
-    });
-    res.json({ success: true, data: announcements });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /api/announcements
-router.post('/announcements', requireAuth, requireRole(Role.ADMINISTRATOR, Role.FACULTY, Role.CLUB_CORE), async (req, res, next) => {
-  try {
-    const { title, content, priority, targetDepartment } = req.body;
-    const isVerifiedByAdmin = req.user?.role === Role.ADMINISTRATOR;
-    const sourceCategory = req.user?.role === Role.ADMINISTRATOR ? 'ADMINISTRATION' : req.user?.role === Role.FACULTY ? 'FACULTY' : 'CLUB';
-
-    const item = await prisma.announcement.create({
-      data: {
-        title,
-        content,
-        priority: priority || 'NORMAL',
-        targetDepartment: targetDepartment || null,
-        sourceCategory,
-        isVerifiedByAdmin,
-        authorId: req.user!.id,
-        authorRole: req.user!.role,
-      },
-    });
-    res.json({ success: true, data: item });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// DELETE /api/announcements/:id
-router.delete('/announcements/:id', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
-  try {
-    await prisma.announcement.delete({ where: { id: req.params.id } });
-    res.json({ success: true, message: 'Announcement deleted.' });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Short cache for the shared public events list (cleared whenever an event is created)
-const eventsCache = new Map<string, { data: any[]; expires: number }>();
-const EVENTS_TTL_MS = 30 * 1000; // 30 seconds
-
-async function getPublicEvents(category: unknown): Promise<any[]> {
-  const key = typeof category === 'string' && category !== 'ALL' ? category : 'ALL';
-  const cached = eventsCache.get(key);
-  if (cached && cached.expires > Date.now()) return cached.data;
-
-  const where: any = { isPublic: true };
-  if (key !== 'ALL') where.category = key;
-  const data = await prisma.event.findMany({
-    where,
-    orderBy: { startTime: 'asc' },
-    include: {
-      club: { select: { name: true, category: true } },
-      organizer: { select: { fullName: true, role: true } },
-    },
-  });
-  eventsCache.set(key, { data, expires: Date.now() + EVENTS_TTL_MS });
-  return data;
+interface SourceCard {
+  type: 'DEADLINE' | 'EVENT' | 'SCHOLARSHIP' | 'LIBRARY' | 'CLUB' | 'MENTOR' | 'ATTENDANCE' | 'ISSUE';
+  title: string;
+  detail: string;
+  meta?: string;
 }
 
-// GET /api/events
-router.get('/events', requireAuth, async (req, res, next) => {
+// POST /api/ai/chat
+router.post('/chat', requireAuth, aiChatRateLimiter, async (req, res, next) => {
   try {
-    const { category } = req.query;
-    const wantsTimetable =
-      req.user?.role === Role.STUDENT && (!category || category === 'ALL' || category === 'ACADEMIC');
+    const { query } = req.body;
+    if (!query || typeof query !== 'string' || !query.trim()) {
+      return res.status(400).json({ error: 'Query is required' });
+    }
 
-    // Run the two independent database lookups at the same time instead of one after another
-    const [publicEvents, student] = await Promise.all([
-      getPublicEvents(category),
-      wantsTimetable ? prisma.studentProfile.findUnique({ where: { userId: req.user!.id } }) : Promise.resolve(null),
-    ]);
-    const events: any[] = [...publicEvents]; // copy, so the cached list is never modified
+    const q = query.trim().toLowerCase();
+    const studentId = req.user!.id;
 
-    // For students: include scheduled academic lectures linked to enrolled subjects
-    if (wantsTimetable && req.user) {
-      if (student && student.branch && student.semester) {
-        const slots = await prisma.timetableSlot.findMany({
-          where: {
-            subject: {
-              branch: student.branch,
-              semester: student.semester,
-            },
-          },
-          include: { subject: true },
+    const sources: SourceCard[] = [];
+    const contextSnippets: string[] = [];
+
+    // 1. Library check
+    if (q.includes('library') || q.includes('seat') || q.includes('book') || q.includes('reading') || q.includes('hall')) {
+      const lib = await prisma.library.findFirst();
+      if (lib) {
+        const available = Math.max(0, lib.capacity - lib.occupied);
+        const pct = Math.round((lib.occupied / lib.capacity) * 100);
+        sources.push({
+          type: 'LIBRARY',
+          title: lib.name,
+          detail: `${available} seats available out of ${lib.capacity} (${pct}% occupied).`,
+          meta: `Updated ${dayjs(lib.lastUpdated).format('h:mm A')}`,
         });
-
-        const startOfWeek = dayjs().startOf('week'); // Sunday
-        for (const slot of slots) {
-          const slotDate = startOfWeek.add(slot.dayOfWeek, 'day');
-          const [startHour, startMin] = slot.startTime.split(':').map(Number);
-          const [endHour, endMin] = slot.endTime.split(':').map(Number);
-
-          const startDateTime = slotDate.hour(startHour).minute(startMin).second(0).toDate();
-          const endDateTime = slotDate.hour(endHour).minute(endMin).second(0).toDate();
-
-          events.push({
-            id: `timetable-${slot.id}-${slotDate.format('YYYYMMDD')}`,
-            title: `${slot.subject.code}: ${slot.subject.name}`,
-            description: `Scheduled academic lecture session for ${slot.subject.name}. Room: ${slot.room}${slot.subject.facultyName ? ` • Faculty: ${slot.subject.facultyName}` : ''}`,
-            category: 'ACADEMIC',
-            location: slot.room,
-            startTime: startDateTime,
-            endTime: endDateTime,
-            organizerId: req.user.id,
-            clubId: null,
-            isPublic: true,
-            createdAt: startDateTime,
-            updatedAt: startDateTime,
-            organizer: { fullName: slot.subject.facultyName || 'Academic Faculty', role: 'FACULTY' },
-          });
-        }
-
-        events.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+        contextSnippets.push(`Central Library currently has ${available} available seats out of ${lib.capacity} total (${pct}% occupancy).`);
       }
     }
 
-    res.json({ success: true, data: events });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /api/events
-router.post('/events', requireAuth, requireRole(Role.ADMINISTRATOR, Role.FACULTY, Role.CLUB_CORE), async (req, res, next) => {
-  try {
-    const { title, description, category, location, startTime, endTime } = req.body;
-    const event = await prisma.event.create({
-      data: {
-        title,
-        description: description || '',
-        category: category || 'CAMPUS',
-        location: location || 'Campus',
-        startTime: new Date(startTime),
-        endTime: new Date(endTime || startTime),
-        organizerId: req.user!.id,
-        isPublic: true,
-      },
-    });
-    eventsCache.clear();
-    res.json({ success: true, data: event });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// GET /api/deadlines
-router.get('/deadlines', requireAuth, async (req, res, next) => {
-  try {
-    const { category } = req.query;
-    const where: any = {};
-    if (category && typeof category === 'string' && category !== 'ALL') where.category = category;
-
-    if (req.user?.role === Role.STUDENT) {
-      const student = await prisma.studentProfile.findUnique({
-        where: { userId: req.user.id },
+    // 2. Deadlines
+    if (q.includes('deadline') || q.includes('due') || q.includes('assignment') || q.includes('submission') || q.includes('exam')) {
+      const deadlines = await prisma.deadline.findMany({
+        where: { dueDate: { gte: new Date() } },
+        orderBy: { dueDate: 'asc' },
+        take: 4,
       });
+      for (const d of deadlines) {
+        sources.push({
+          type: 'DEADLINE',
+          title: d.title,
+          detail: `${d.category} - Source: ${d.source}`,
+          meta: `Due ${dayjs(d.dueDate).format('MMM D, YYYY')}`,
+        });
+        contextSnippets.push(`Deadline: "${d.title}" (${d.category}) is due on ${dayjs(d.dueDate).format('YYYY-MM-DD')}.`);
+      }
+    }
+
+    // 3. Events
+    if (q.includes('event') || q.includes('workshop') || q.includes('meet') || q.includes('fest') || q.includes('calendar') || q.includes('techx')) {
+      const events = await prisma.event.findMany({
+        where: { startTime: { gte: new Date() } },
+        orderBy: { startTime: 'asc' },
+        take: 4,
+      });
+      for (const ev of events) {
+        sources.push({
+          type: 'EVENT',
+          title: ev.title,
+          detail: `${ev.category} at ${ev.location}`,
+          meta: dayjs(ev.startTime).format('MMM D, h:mm A'),
+        });
+        contextSnippets.push(`Event: "${ev.title}" (${ev.category}) at ${ev.location} on ${dayjs(ev.startTime).format('YYYY-MM-DD h:mm A')}.`);
+      }
+    }
+
+    // 4. Attendance (logged-in student's own attendance only)
+    if (q.includes('attendance') || q.includes('bunk') || q.includes('miss') || q.includes('subject') || q.includes('threshold') || q.includes('class')) {
+      const student = await prisma.studentProfile.findUnique({ where: { userId: studentId } });
       if (student && student.branch && student.semester) {
-        const enrolledSubjects = await prisma.subject.findMany({
+        const subjects = await prisma.subject.findMany({
           where: { branch: student.branch, semester: student.semester },
-          select: { code: true, name: true },
+          include: { attendanceRecords: { where: { studentId } } },
         });
-        const subjectCodes = enrolledSubjects.map((s) => s.code);
 
-        const branchVariants = [student.branch];
-        if (student.branch.toLowerCase().includes('computer')) {
-          branchVariants.push('CSE', 'Computer Science');
-        } else if (student.branch.toLowerCase().includes('mechanical')) {
-          branchVariants.push('ME', 'Mechanical');
-        } else if (student.branch.toLowerCase().includes('electrical')) {
-          branchVariants.push('EE', 'Electrical');
+        let total = 0;
+        let attended = 0;
+        for (const sub of subjects) {
+          const sTotal = sub.attendanceRecords.length;
+          const sAtt = sub.attendanceRecords.filter((r) => r.status === 'PRESENT').length;
+          const sPct = sTotal > 0 ? Math.round((sAtt / sTotal) * 100) : 100;
+          total += sTotal;
+          attended += sAtt;
+
+          sources.push({
+            type: 'ATTENDANCE',
+            title: `${sub.code}: ${sub.name}`,
+            detail: `${sAtt}/${sTotal} attended (${sPct}%)`,
+            meta: sPct < ATTENDANCE_TARGET ? `Below ${ATTENDANCE_TARGET}% threshold` : 'Compliant',
+          });
+          contextSnippets.push(`Student's attendance in ${sub.code} (${sub.name}) is ${sPct}% (${sAtt}/${sTotal} classes attended).`);
         }
-
-        const deadlineFilters: any[] = [
-          // General / all-campus deadlines
-          { department: null, semester: null },
-          // Branch / semester targeted deadlines
-          {
-            OR: branchVariants.map((v) => ({ department: { contains: v, mode: 'insensitive' as const } })),
-            ...(student.semester ? { OR: [{ semester: null }, { semester: student.semester }] } : {}),
-          },
-        ];
-
-        // Deadlines linked to enrolled subject codes
-        for (const code of subjectCodes) {
-          deadlineFilters.push({ title: { contains: code, mode: 'insensitive' as const } });
-          deadlineFilters.push({ description: { contains: code, mode: 'insensitive' as const } });
-        }
-
-        where.AND = where.AND || [];
-        where.AND.push({ OR: deadlineFilters });
+        const overall = total > 0 ? Math.round((attended / total) * 100) : 100;
+        contextSnippets.push(`Student's overall attendance across all semester ${student.semester} subjects is ${overall}%.`);
       }
     }
 
-    const deadlines = await prisma.deadline.findMany({
-      where,
-      orderBy: { dueDate: 'asc' },
-    });
-    res.json({ success: true, data: deadlines });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /api/deadlines
-router.post('/deadlines', requireAuth, requireRole(Role.ADMINISTRATOR, Role.FACULTY), async (req, res, next) => {
-  try {
-    const { title, description, dueDate, category, source } = req.body;
-    const deadline = await prisma.deadline.create({
-      data: {
-        title,
-        description: description || '',
-        dueDate: new Date(dueDate),
-        category: category || 'ACADEMIC',
-        source: source || 'Administration',
-      },
-    });
-    res.json({ success: true, data: deadline });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// GET /api/library
-router.get('/library', requireAuth, async (req, res, next) => {
-  try {
-    let library = await prisma.library.findFirst();
-    if (!library) {
-      library = await prisma.library.create({
-        data: { id: 'campus-main-library', name: 'Central University Library', capacity: 200, occupied: 68, lastUpdated: new Date() },
+    // 5. Scholarships
+    if (q.includes('scholarship') || q.includes('grant') || q.includes('financial') || q.includes('funding') || q.includes('pragati') || q.includes('aicte')) {
+      const scholarships = await prisma.scholarship.findMany({
+        where: { isDeleted: false },
+        take: 3,
       });
+      for (const s of scholarships) {
+        sources.push({
+          type: 'SCHOLARSHIP',
+          title: s.name,
+          detail: `Amount: ${s.amount} • Provider: ${s.provider}`,
+          meta: `Deadline: ${dayjs(s.deadline).format('MMM D, YYYY')}`,
+        });
+        contextSnippets.push(`Scholarship: "${s.name}" provides ${s.amount} by ${s.provider}. Eligibility: ${s.eligibility}.`);
+      }
     }
-    const available = Math.max(0, library.capacity - library.occupied);
-    const occupancyPercentage = library.capacity > 0 ? Math.round((library.occupied / library.capacity) * 100) : 0;
-    res.json({ success: true, data: { ...library, available, occupancyPercentage } });
-  } catch (err) {
-    next(err);
-  }
-});
 
-// PATCH /api/library
-router.patch('/library', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
-  try {
-    const { delta, capacity: newCapacity } = req.body;
-    let library = await prisma.library.findFirst();
-    if (!library) {
-      library = await prisma.library.create({
-        data: { id: 'campus-main-library', name: 'Central University Library', capacity: 200, occupied: 68, lastUpdated: new Date() },
+    // 6. Clubs
+    if (q.includes('club') || q.includes('society') || q.includes('robotics') || q.includes('acm') || q.includes('recruitment')) {
+      const clubs = await prisma.club.findMany({ take: 4 });
+      for (const c of clubs) {
+        sources.push({
+          type: 'CLUB',
+          title: c.name,
+          detail: `${c.category} - ${c.description}`,
+          meta: c.contactEmail,
+        });
+        contextSnippets.push(`Club: "${c.name}" (${c.category}). Description: ${c.description}. Contact: ${c.contactEmail}.`);
+      }
+    }
+
+    // 7. Mentors
+    if (q.includes('mentor') || q.includes('senior') || q.includes('guidance') || q.includes('connect')) {
+      const mentors = await prisma.mentorProfile.findMany({
+        where: { isAvailable: true },
+        include: { user: { include: { studentProfile: true } } },
+        take: 3,
       });
+      for (const m of mentors) {
+        sources.push({
+          type: 'MENTOR',
+          title: m.user.fullName,
+          detail: `Year ${m.user.studentProfile?.yearOfStudy || 3} • ${m.user.studentProfile?.branch}`,
+          meta: m.interests.join(', '),
+        });
+        contextSnippets.push(`Mentor: ${m.user.fullName} (${m.user.studentProfile?.branch}, Year ${m.user.studentProfile?.yearOfStudy}). Interests: ${m.interests.join(', ')}.`);
+      }
     }
 
-    const targetCap = typeof newCapacity === 'number' && newCapacity > 0 ? newCapacity : library.capacity;
-    let newOccupied = library.occupied;
-    if (typeof delta === 'number') {
-      newOccupied = Math.min(targetCap, Math.max(0, library.occupied + delta));
+    // 8. Campus Issues (logged-in student's own issues only)
+    if (q.includes('issue') || q.includes('complaint') || q.includes('wifi') || q.includes('repair') || q.includes('facility')) {
+      const issues = await prisma.campusIssue.findMany({
+        where: { reporterId: studentId },
+        take: 3,
+      });
+      for (const iss of issues) {
+        sources.push({
+          type: 'ISSUE',
+          title: `${iss.issueCode}: ${iss.title}`,
+          detail: `Status: ${iss.status} at ${iss.location}`,
+          meta: dayjs(iss.createdAt).format('MMM D, YYYY'),
+        });
+        contextSnippets.push(`Student's reported issue: ${iss.issueCode} "${iss.title}" is currently ${iss.status}.`);
+      }
     }
 
-    const updated = await prisma.library.update({
-      where: { id: library.id },
-      data: {
-        occupied: newOccupied,
-        capacity: targetCap,
-        lastUpdated: new Date(),
-        updatedById: req.user!.id,
-      },
-    });
+    let answer = '';
 
-    const available = Math.max(0, updated.capacity - updated.occupied);
-    const occupancyPercentage = Math.round((updated.occupied / updated.capacity) * 100);
-    res.json({ success: true, data: { ...updated, available, occupancyPercentage } });
-  } catch (err) {
-    next(err);
-  }
-});
+    // LLM phrasing (Groq / OpenAI / any OpenAI-compatible provider) with rule-based fallback
+    if (AI_API_KEY) {
+      const hasRecords = contextSnippets.length > 0;
+      const systemPrompt = hasRecords
+        ? 'You are CampusSync AI, the university campus assistant. Answer the student query concisely and strictly using the retrieved campus database records provided below. Never invent details or deadlines not present in the records. If information is not found in the records, explicitly say so.'
+        : 'You are CampusSync AI, a friendly university campus assistant. No campus database records matched this question. You may give brief, general study or student-life guidance, but never invent campus-specific facts such as dates, deadlines, names, numbers or seat counts. For campus-specific questions, suggest asking about library seating, deadlines, events, scholarships, clubs, mentors or attendance.';
+      const userContent = hasRecords
+        ? `Retrieved Campus Database Context:\n${contextSnippets.join('\n')}\n\nStudent Query: "${query}"`
+        : `Student Query: "${query}"`;
 
-// ==================== LOST & FOUND ====================
-// GET /api/lost-found (active items, not resolved, <= 30 days old calculated)
-router.get('/lost-found', requireAuth, async (req, res, next) => {
-  try {
-    const thirtyDaysAgo = dayjs().subtract(30, 'day').toDate();
-    const items = await prisma.lostItem.findMany({
-      where: {
-        isResolved: false,
-        createdAt: { gte: thirtyDaysAgo },
-      },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
-      },
-    });
-    res.json({ success: true, data: items });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /api/lost-found
-router.post('/lost-found', requireAuth, async (req, res, next) => {
-  try {
-    const { title, description, locationLost, dateLost, timeLost, contactEmail, contactPhone, imageUrl } = req.body;
-    const item = await prisma.lostItem.create({
-      data: {
-        title,
-        description,
-        locationLost,
-        dateLost: new Date(dateLost),
-        timeLost: timeLost || null,
-        contactEmail: contactEmail || req.user!.email,
-        contactPhone: contactPhone || null,
-        imageUrl: imageUrl || null,
-        userId: req.user!.id,
-        isResolved: false,
-      },
-    });
-    res.json({ success: true, data: item });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PATCH /api/lost-found/:id/found (only owner or admin can mark found)
-router.patch('/lost-found/:id/found', requireAuth, async (req, res, next) => {
-  try {
-    const item = await prisma.lostItem.findUnique({ where: { id: req.params.id } });
-    if (!item) return res.status(404).json({ error: 'Item not found' });
-
-    if (item.userId !== req.user!.id && req.user!.role !== Role.ADMINISTRATOR) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Only post creator or administrator can mark item found.' });
-    }
-
-    const updated = await prisma.lostItem.update({
-      where: { id: req.params.id },
-      data: { isResolved: true, resolvedAt: new Date() },
-    });
-    res.json({ success: true, data: updated });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ==================== CONNECT (MENTORS) ====================
-// GET /api/mentors
-router.get('/mentors', requireAuth, async (req, res, next) => {
-  try {
-    const { branch, interest } = req.query;
-
-    // Fetch current user's student profile for branch prioritization
-    const currentStudent = await prisma.studentProfile.findUnique({
-      where: { userId: req.user!.id },
-    });
-
-    const where: any = { isAvailable: true };
-    if (interest && typeof interest === 'string') {
-      where.interests = { has: interest };
-    }
-
-    const mentors = await prisma.mentorProfile.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phone: true,
-            studentProfile: true,
+      try {
+        const response = await fetch(`${AI_BASE_URL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${AI_API_KEY}`,
           },
-        },
-      },
-    });
+          body: JSON.stringify({
+            model: AI_MODEL,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userContent },
+            ],
+            temperature: 0.2,
+            max_completion_tokens: 1024,
+            ...(AI_MODEL.includes('gpt-oss') ? { reasoning_effort: 'low' } : {}),
+          }),
+        });
 
-    // Sanitise according to privacy toggles & apply branch filter
-    let results = mentors
-      .filter((m) => {
-        if (branch && typeof branch === 'string' && branch !== 'ALL') {
-          return m.user.studentProfile?.branch === branch;
+        if (response.ok) {
+          const data = await response.json();
+          const choice = (data as any).choices?.[0];
+          const content = choice?.message?.content;
+          answer = typeof content === 'string' ? content.trim() : '';
+          if (!answer) {
+            console.error(`[AI] Provider returned an empty answer (model: ${AI_MODEL}, finish: ${choice?.finish_reason || 'unknown'})`);
+          }
+        } else {
+          const responseBody = await response.text();
+          console.error(`[AI] Provider returned HTTP ${response.status} (model: ${AI_MODEL}, base: ${AI_BASE_URL}) ${responseBody.slice(0, 300)}`);
         }
-        return true;
-      })
-      .map((m) => {
-        return {
-          id: m.id,
-          userId: m.userId,
-          fullName: m.user.fullName,
-          program: m.user.studentProfile?.program || 'B.Tech',
-          branch: m.user.studentProfile?.branch || 'Engineering',
-          yearOfStudy: m.user.studentProfile?.yearOfStudy || 3,
-          bio: m.bio,
-          interests: m.interests,
-          email: m.shareEmail ? m.user.email : null,
-          phone: m.sharePhone ? m.user.phone : null,
-          linkedInUrl: m.shareLinkedIn ? m.linkedInUrl : null,
-          isSameBranch: currentStudent ? m.user.studentProfile?.branch === currentStudent.branch : false,
-        };
-      });
-
-    // Sort: Same-branch first, then alphabetically
-    results.sort((a, b) => {
-      if (a.isSameBranch && !b.isSameBranch) return -1;
-      if (!a.isSameBranch && b.isSameBranch) return 1;
-      return a.fullName.localeCompare(b.fullName);
-    });
-
-    res.json({ success: true, data: results });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PATCH /api/mentors/availability (Year 2+ check on server)
-router.patch('/mentors/availability', requireAuth, async (req, res, next) => {
-  try {
-    const student = await prisma.studentProfile.findUnique({ where: { userId: req.user!.id } });
-    if (!student || (student.yearOfStudy ?? 0) < 2) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Only students in Year 2 or above are eligible to mentor.',
-      });
-    }
-
-    const { isAvailable, bio, interests, shareEmail, sharePhone, shareLinkedIn, linkedInUrl } = req.body;
-
-    const mentor = await prisma.mentorProfile.upsert({
-      where: { userId: req.user!.id },
-      create: {
-        userId: req.user!.id,
-        isAvailable: Boolean(isAvailable),
-        bio: bio || 'Available to guide fellow students.',
-        interests: Array.isArray(interests) ? interests : ['General Academics', 'Career Advice'],
-        shareEmail: shareEmail ?? true,
-        sharePhone: sharePhone ?? false,
-        shareLinkedIn: shareLinkedIn ?? false,
-        linkedInUrl: linkedInUrl || null,
-      },
-      update: {
-        ...(typeof isAvailable === 'boolean' ? { isAvailable } : {}),
-        ...(bio !== undefined ? { bio } : {}),
-        ...(Array.isArray(interests) ? { interests } : {}),
-        ...(typeof shareEmail === 'boolean' ? { shareEmail } : {}),
-        ...(typeof sharePhone === 'boolean' ? { sharePhone } : {}),
-        ...(typeof shareLinkedIn === 'boolean' ? { shareLinkedIn } : {}),
-        ...(linkedInUrl !== undefined ? { linkedInUrl } : {}),
-      },
-    });
-
-    res.json({ success: true, data: mentor });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ==================== SCHOLARSHIPS ====================
-// GET /api/scholarships (students browse, filter, search, saved status, recipient/mentor metrics)
-router.get('/scholarships', requireAuth, async (req, res, next) => {
-  try {
-    const { search, branch } = req.query;
-    const where: any = { isDeleted: false };
-
-    if (search && typeof search === 'string') {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { provider: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    if (branch && typeof branch === 'string' && branch !== 'ALL') {
-      where.OR = [{ branch: null }, { branch }];
-    }
-
-    const scholarships = await prisma.scholarship.findMany({
-      where,
-      orderBy: { deadline: 'asc' },
-      include: {
-        savedBy: {
-          where: { studentId: req.user!.id },
-          select: { id: true, status: true },
-        },
-        recipients: {
-          include: {
-            student: {
-              include: {
-                mentorProfile: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    const enriched = scholarships.map((s) => {
-      const recipientCount = s.recipients.length;
-      const mentorsAvailableCount = s.recipients.filter(
-        (r) => r.student.mentorProfile && r.student.mentorProfile.isAvailable
-      ).length;
-      const isSaved = s.savedBy.length > 0;
-      const applicationStatus = s.savedBy[0]?.status || null;
-
-      // Sanitise: remove raw student user objects to prevent leakage of personal data
-      const { recipients, savedBy, ...rest } = s;
-
-      return {
-        ...rest,
-        recipientCount,
-        mentorsAvailableCount,
-        isSaved,
-        applicationStatus,
-      };
-    });
-
-    res.json({ success: true, data: enriched });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /api/scholarships (Admin only)
-router.post('/scholarships', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
-  try {
-    const { name, provider, amount, deadline, description, eligibility, branch, applicationLink, isVerifiedByAdmin } = req.body;
-    const created = await prisma.scholarship.create({
-      data: {
-        name,
-        provider,
-        amount,
-        deadline: new Date(deadline),
-        description,
-        eligibility,
-        branch: branch || null,
-        applicationLink,
-        isVerifiedByAdmin: isVerifiedByAdmin ?? true,
-      },
-    });
-    res.json({ success: true, data: created });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PATCH /api/scholarships/:id (Admin only)
-router.patch('/scholarships/:id', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
-  try {
-    const { name, provider, amount, deadline, description, eligibility, branch, applicationLink, isVerifiedByAdmin } = req.body;
-    const updated = await prisma.scholarship.update({
-      where: { id: req.params.id },
-      data: {
-        ...(name && { name }),
-        ...(provider && { provider }),
-        ...(amount && { amount }),
-        ...(deadline && { deadline: new Date(deadline) }),
-        ...(description && { description }),
-        ...(eligibility && { eligibility }),
-        ...(branch !== undefined && { branch }),
-        ...(applicationLink && { applicationLink }),
-        ...(typeof isVerifiedByAdmin === 'boolean' && { isVerifiedByAdmin }),
-      },
-    });
-    res.json({ success: true, data: updated });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// DELETE /api/scholarships/:id (Admin only - soft delete: hides from students)
-router.delete('/scholarships/:id', requireAuth, requireRole(Role.ADMINISTRATOR), async (req, res, next) => {
-  try {
-    await prisma.scholarship.update({
-      where: { id: req.params.id },
-      data: { isDeleted: true },
-    });
-    res.json({ success: true, message: 'Scholarship removed (soft-deleted)' });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /api/scholarships/:id/save (Student save / bookmark toggle)
-router.post('/scholarships/:id/save', requireAuth, async (req, res, next) => {
-  try {
-    const existing = await prisma.savedScholarship.findUnique({
-      where: {
-        studentId_scholarshipId: {
-          studentId: req.user!.id,
-          scholarshipId: req.params.id,
-        },
-      },
-    });
-
-    if (existing) {
-      await prisma.savedScholarship.delete({
-        where: { id: existing.id },
-      });
-      return res.json({ success: true, isSaved: false });
-    } else {
-      await prisma.savedScholarship.create({
-        data: {
-          studentId: req.user!.id,
-          scholarshipId: req.params.id,
-        },
-      });
-      return res.json({ success: true, isSaved: true });
-    }
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ==================== OPPORTUNITIES ====================
-// GET /api/opportunities (search, category filter, saved/applied status)
-router.get('/opportunities', requireAuth, async (req, res, next) => {
-  try {
-    const { search, category } = req.query;
-    const where: any = {};
-
-    if (search && typeof search === 'string') {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { organization: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    if (category && typeof category === 'string' && category !== 'ALL') {
-      where.category = category;
-    }
-
-    const items = await prisma.opportunity.findMany({
-      where,
-      orderBy: { deadline: 'asc' },
-      include: {
-        savedBy: {
-          where: { studentId: req.user!.id },
-        },
-      },
-    });
-
-    const enriched = items.map((op) => {
-      const savedRecord = op.savedBy[0];
-      const { savedBy, ...rest } = op;
-      return {
-        ...rest,
-        isSaved: Boolean(savedRecord),
-        applicationStatus: savedRecord?.status || null, // 'SAVED' | 'APPLIED' | null
-      };
-    });
-
-    res.json({ success: true, data: enriched });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /api/opportunities/:id/save
-router.post('/opportunities/:id/save', requireAuth, async (req, res, next) => {
-  try {
-    const existing = await prisma.savedOpportunity.findUnique({
-      where: {
-        studentId_opportunityId: {
-          studentId: req.user!.id,
-          opportunityId: req.params.id,
-        },
-      },
-    });
-
-    if (existing) {
-      await prisma.savedOpportunity.delete({ where: { id: existing.id } });
-      return res.json({ success: true, isSaved: false, status: null });
-    } else {
-      const created = await prisma.savedOpportunity.create({
-        data: {
-          studentId: req.user!.id,
-          opportunityId: req.params.id,
-          status: 'SAVED',
-        },
-      });
-      return res.json({ success: true, isSaved: true, status: created.status });
-    }
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PATCH /api/opportunities/:id/status (toggle/update APPLIED status)
-router.patch('/api/opportunities/:id/status', requireAuth, async (req, res, next) => {
-  try {
-    const { status } = req.body; // 'SAVED' | 'APPLIED'
-    const updated = await prisma.savedOpportunity.upsert({
-      where: {
-        studentId_opportunityId: {
-          studentId: req.user!.id,
-          opportunityId: req.params.id,
-        },
-      },
-      create: {
-        studentId: req.user!.id,
-        opportunityId: req.params.id,
-        status: status || 'APPLIED',
-      },
-      update: {
-        status: status || 'APPLIED',
-      },
-    });
-
-    res.json({ success: true, data: updated });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ==================== CLUBS & SOCIETIES ====================
-// GET /api/clubs (browse clubs with events, announcements, and recruitment)
-router.get('/clubs', requireAuth, async (req, res, next) => {
-  try {
-    const { category, search } = req.query;
-    const where: any = {};
-    if (category && typeof category === 'string' && category !== 'ALL') {
-      where.category = category;
-    }
-    if (search && typeof search === 'string') {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    const clubs = await prisma.club.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      include: {
-        events: {
-          where: { startTime: { gte: new Date() } },
-          orderBy: { startTime: 'asc' },
-          take: 3,
-        },
-        members: {
-          where: { role: 'LEAD' },
-          include: { user: { select: { fullName: true, email: true } } },
-        },
-      },
-    });
-
-    res.json({ success: true, data: clubs });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// GET /api/club/my-club (Club Core gets their managed club)
-router.get('/club/my-club', requireAuth, requireRole(Role.CLUB_CORE, Role.ADMINISTRATOR), async (req, res, next) => {
-  try {
-    const membership = await prisma.clubMembership.findFirst({
-      where: { userId: req.user!.id },
-      include: {
-        club: {
-          include: {
-            events: { orderBy: { startTime: 'desc' } },
-          },
-        },
-      },
-    });
-
-    if (!membership && req.user!.role !== Role.ADMINISTRATOR) {
-      return res.status(403).json({ error: 'Forbidden', message: 'You are not assigned as Core of any club.' });
-    }
-
-    const club = membership ? membership.club : await prisma.club.findFirst({ include: { events: true } });
-    res.json({ success: true, data: club });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PATCH /api/clubs/:id (Club Core manages ONLY their own club, 403 otherwise)
-router.patch('/clubs/:id', requireAuth, requireRole(Role.CLUB_CORE, Role.ADMINISTRATOR), async (req, res, next) => {
-  try {
-    // Ownership check on the server
-    if (req.user!.role !== Role.ADMINISTRATOR) {
-      const membership = await prisma.clubMembership.findFirst({
-        where: { clubId: req.params.id, userId: req.user!.id },
-      });
-      if (!membership) {
-        return res.status(403).json({ error: 'Forbidden', message: 'You can only edit your own club.' });
+      } catch (err: any) {
+        console.error('[AI] Provider request failed:', err.message);
       }
     }
 
-    const { description, contactEmail, websiteUrl } = req.body;
-    const updated = await prisma.club.update({
-      where: { id: req.params.id },
-      data: {
-        ...(description && { description }),
-        ...(contactEmail && { contactEmail }),
-        ...(websiteUrl !== undefined && { websiteUrl }),
-      },
-    });
-
-    res.json({ success: true, data: updated });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /api/clubs/:id/events (Club Core creates event for their club)
-router.post('/clubs/:id/events', requireAuth, requireRole(Role.CLUB_CORE, Role.ADMINISTRATOR), async (req, res, next) => {
-  try {
-    if (req.user!.role !== Role.ADMINISTRATOR) {
-      const membership = await prisma.clubMembership.findFirst({
-        where: { clubId: req.params.id, userId: req.user!.id },
-      });
-      if (!membership) {
-        return res.status(403).json({ error: 'Forbidden', message: 'You can only create events for your own club.' });
-      }
+    // Fallback when no key is set, the provider failed, or nothing matched
+    if (!answer && contextSnippets.length === 0) {
+      answer = `I could not find any active campus database records matching your query "${query}". Please check your query keywords or ask about library seating, upcoming deadlines, scheduled events, scholarships, student clubs, or your personal attendance records.`;
+    }
+    if (!answer && contextSnippets.length > 0) {
+      answer = `Here is what I found in the campus records regarding your query:\n\n` +
+        contextSnippets.map((s, idx) => `${idx + 1}. ${s}`).join('\n\n') +
+        `\n\nAll details are retrieved live from verified university database records.`;
     }
 
-    const { title, description, location, startTime, endTime } = req.body;
-    const event = await prisma.event.create({
+    res.json({
+      success: true,
       data: {
-        title,
-        description: description || '',
-        category: 'CLUB',
-        location: location || 'Campus',
-        startTime: new Date(startTime),
-        endTime: new Date(endTime || startTime),
-        clubId: req.params.id,
-        organizerId: req.user!.id,
-        isPublic: true,
+        answer,
+        sources,
       },
     });
-
-    eventsCache.clear();
-    res.json({ success: true, data: event });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ==================== FACULTY DASHBOARD ====================
-// GET /api/faculty/overview (Aggregate attendance for their own subjects ONLY)
-router.get('/faculty/overview', requireAuth, requireRole(Role.FACULTY), async (req, res, next) => {
-  try {
-    // Fetch subjects assigned to this faculty
-    const subjects = await prisma.subject.findMany({
-      where: {
-        OR: [
-          { facultyId: req.user!.id },
-          { facultyName: { contains: (req.user as any).fullName, mode: 'insensitive' } },
-        ],
-      },
-      include: {
-        attendanceRecords: true,
-      },
-      orderBy: { code: 'asc' },
-    });
-
-    const breakdown = subjects.map((sub) => {
-      const totalMarks = sub.attendanceRecords.length;
-      const presentMarks = sub.attendanceRecords.filter((r) => r.status === 'PRESENT').length;
-      const averageAttendance = totalMarks > 0 ? Math.round((presentMarks / totalMarks) * 100) : 100;
-
-      return {
-        id: sub.id,
-        code: sub.code,
-        name: sub.name,
-        branch: sub.branch,
-        semester: sub.semester,
-        totalMarks,
-        averageAttendance,
-      };
-    });
-
-    res.json({ success: true, data: { subjects: breakdown } });
   } catch (err) {
     next(err);
   }

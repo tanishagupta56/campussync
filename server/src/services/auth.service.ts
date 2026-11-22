@@ -6,7 +6,10 @@ import { config } from '../config/env';
 import { generateSecureOtp, hashOtp, verifyOtpHash } from '../utils/crypto';
 import { sendOtpEmail, sendAccountNoticeEmail } from './email.service';
 
-const prisma = new PrismaClient();
+
+import { prisma as sharedPrisma } from '../db/prisma';
+const prisma = sharedPrisma;
+
 
 export interface InitiateLoginParams {
   email: string;
@@ -15,6 +18,7 @@ export interface InitiateLoginParams {
   ipAddress?: string;
 }
 
+
 export interface VerifyOtpParams {
   challengeId: string;
   otp: string;
@@ -22,9 +26,11 @@ export interface VerifyOtpParams {
   userAgent?: string;
 }
 
+
 export interface ResendOtpParams {
   challengeId: string;
 }
+
 
 export interface RegisterUserParams {
   fullName: string;
@@ -35,12 +41,14 @@ export interface RegisterUserParams {
   ipAddress?: string;
 }
 
+
 export interface VerifyRegistrationParams {
   challengeId: string;
   otp: string;
   ipAddress?: string;
   userAgent?: string;
 }
+
 
 export class AuthService {
   /**
@@ -49,11 +57,13 @@ export class AuthService {
   static async initiateLogin({ email, password, selectedRole, ipAddress }: InitiateLoginParams) {
     const normalizedEmail = email.toLowerCase().trim();
 
+
     // 1. Fetch user by email
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
       include: { studentProfile: true },
     });
+
 
     // 2. Timing-safe password verification
     let isPasswordValid = false;
@@ -64,15 +74,18 @@ export class AuthService {
       await bcrypt.compare(password, '$2a$10$abcdefghijklmnopqrstuvwxyzABCDEFGH');
     }
 
+
     if (!user || !isPasswordValid) {
       // Safe, generic error message
       throw { status: 401, message: 'Incorrect email or password.' };
     }
 
+
     // Unverified accounts cannot log in
     if (user.isEmailVerified === false) {
       throw { status: 403, message: 'Your account is not verified. Please complete email verification.' };
     }
+
 
     // 3. Strict Role Verification against Database Source of Truth
     // The database is the final authority. Selected role never grants elevated access.
@@ -88,6 +101,7 @@ export class AuthService {
       }
     }
 
+
     // 4. Invalidate any existing pending challenges for this user
     await prisma.otpChallenge.updateMany({
       where: {
@@ -99,10 +113,12 @@ export class AuthService {
       },
     });
 
+
     // 5. Generate secure 6-digit OTP and store hash in database
     const plainOtp = generateSecureOtp();
     const otpHash = hashOtp(plainOtp);
     const expiresAt = dayjs().add(10, 'minute').toDate();
+
 
     const challenge = await prisma.otpChallenge.create({
       data: {
@@ -114,6 +130,7 @@ export class AuthService {
       },
     });
 
+
     // 6. Deliver OTP via email (or dev console fallback)
     await sendOtpEmail({
       toEmail: user.email,
@@ -122,12 +139,14 @@ export class AuthService {
       role: user.role,
     });
 
+
     // Return masked email and challengeId (NEVER return plain OTP or user hash)
     const emailParts = user.email.split('@');
     const maskedName = emailParts[0].length > 3
       ? `${emailParts[0].slice(0, 2)}***${emailParts[0].slice(-1)}`
       : `${emailParts[0].slice(0, 1)}***`;
     const maskedEmail = `${maskedName}@${emailParts[1]}`;
+
 
     return {
       challengeId: challenge.id,
@@ -138,6 +157,7 @@ export class AuthService {
       ...(config.devShowOtp && user.email.includes('@') ? { devOtp: plainOtp } : {}),
     };
   }
+
 
   /**
    * Step 2: Verifies the 6-digit OTP, handles attempt limits, and issues a session token.
@@ -155,19 +175,23 @@ export class AuthService {
       },
     });
 
+
     if (!challenge) {
       throw { status: 400, message: 'Invalid or expired verification session. Please log in again.' };
     }
+
 
     // Check if challenge is already consumed
     if (challenge.consumedAt) {
       throw { status: 400, message: 'This verification code has already been used. Please log in again.' };
     }
 
+
     // Check if challenge has expired (10 minutes)
     if (dayjs().isAfter(dayjs(challenge.expiresAt))) {
       throw { status: 400, message: 'Verification code has expired. Please request a new code.' };
     }
+
 
     // Check attempt limits (Maximum 5 wrong attempts)
     if (challenge.attempts >= 5) {
@@ -182,8 +206,10 @@ export class AuthService {
       };
     }
 
+
     // Verify OTP Hash using timing-safe comparison
     const isValidOtp = verifyOtpHash(otp, challenge.otpHash);
+
 
     if (!isValidOtp) {
       const updatedAttempts = challenge.attempts + 1;
@@ -191,6 +217,7 @@ export class AuthService {
         where: { id: challenge.id },
         data: { attempts: updatedAttempts },
       });
+
 
       const remaining = 5 - updatedAttempts;
       if (remaining <= 0) {
@@ -205,17 +232,20 @@ export class AuthService {
         };
       }
 
+
       throw {
         status: 400,
         message: `Incorrect verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
       };
     }
 
+
     // Success! Mark challenge as consumed
     await prisma.otpChallenge.update({
       where: { id: challenge.id },
       data: { consumedAt: new Date() },
     });
+
 
     // Create session record in database
     const sessionExpiry = dayjs().add(7, 'day').toDate();
@@ -229,6 +259,7 @@ export class AuthService {
       { expiresIn: '7d' }
     );
 
+
     await prisma.session.create({
       data: {
         userId: challenge.user.id,
@@ -239,14 +270,17 @@ export class AuthService {
       },
     });
 
+
     // Return sanitized user object (never include passwordHash or otp secrets)
     const { passwordHash, ...safeUser } = challenge.user;
+
 
     return {
       token: sessionToken,
       user: safeUser,
     };
   }
+
 
   /**
    * Resend OTP with cooldown (60s) and hourly cap.
@@ -257,9 +291,11 @@ export class AuthService {
       include: { user: true },
     });
 
+
     if (!existing || existing.consumedAt) {
       throw { status: 400, message: 'Invalid or already consumed challenge. Please log in again.' };
     }
+
 
     // 60-second cooldown check
     const secondsSinceCreation = dayjs().diff(dayjs(existing.createdAt), 'second');
@@ -271,6 +307,7 @@ export class AuthService {
       };
     }
 
+
     // Hourly cap check (maximum 5 requests per hour)
     const oneHourAgo = dayjs().subtract(1, 'hour').toDate();
     const recentCount = await prisma.otpChallenge.count({
@@ -280,6 +317,7 @@ export class AuthService {
       },
     });
 
+
     if (recentCount >= 5) {
       throw {
         status: 429,
@@ -287,10 +325,12 @@ export class AuthService {
       };
     }
 
+
     // Generate new OTP for the challenge
     const newOtp = generateSecureOtp();
     const newHash = hashOtp(newOtp);
     const newExpiry = dayjs().add(10, 'minute').toDate();
+
 
     await prisma.otpChallenge.update({
       where: { id: challengeId },
@@ -301,6 +341,7 @@ export class AuthService {
       },
     });
 
+
     await sendOtpEmail({
       toEmail: existing.user.email,
       recipientName: existing.user.fullName,
@@ -308,12 +349,14 @@ export class AuthService {
       role: existing.user.role,
     });
 
+
     return {
       success: true,
       message: 'A fresh 6-digit verification code has been sent.',
       ...(config.devShowOtp && existing.user.email.includes('@') ? { devOtp: newOtp } : {}),
     };
   }
+
 
   /**
    * Self-Registration for Students
@@ -332,7 +375,9 @@ export class AuthService {
       // Ignore background cleanup errors
     }
 
+
     const normalizedEmail = email.toLowerCase().trim();
+
 
     // 2. Validate branch and semester options against Subject table in the database only if provided
     if (branch && semester) {
@@ -344,21 +389,25 @@ export class AuthService {
       }
     }
 
+
     // 3. Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
+
 
     if (existingUser && existingUser.isEmailVerified) {
       // If the email already has an account, respond exactly as for a new registration (generic message)
       // and email that address a notice, so account existence isn't revealed.
       await sendAccountNoticeEmail(existingUser.email, existingUser.fullName);
 
+
       const emailParts = normalizedEmail.split('@');
       const maskedName = emailParts[0].length > 3
         ? `${emailParts[0].slice(0, 2)}***${emailParts[0].slice(-1)}`
         : `${emailParts[0].slice(0, 1)}***`;
       const maskedEmail = `${maskedName}@${emailParts[1]}`;
+
 
       return {
         challengeId: '00000000-0000-0000-0000-000000000000',
@@ -367,6 +416,7 @@ export class AuthService {
         message: `A 6-digit verification code has been sent to ${maskedEmail}.`,
       };
     }
+
 
     // 4. Create or update unverified account (Role is ALWAYS STUDENT, set on server)
     const passwordHash = await bcrypt.hash(password, 10);
@@ -397,6 +447,7 @@ export class AuthService {
       });
     }
 
+
     // 5. Check hourly cap for OTP creation
     const oneHourAgo = dayjs().subtract(1, 'hour').toDate();
     const recentCount = await prisma.otpChallenge.count({
@@ -406,16 +457,19 @@ export class AuthService {
       throw { status: 429, message: 'Too many verification code requests. Please wait an hour.' };
     }
 
+
     // Invalidate existing pending challenges
     await prisma.otpChallenge.updateMany({
       where: { userId: user.id, consumedAt: null },
       data: { consumedAt: new Date() },
     });
 
+
     // 6. Generate OTP, hash, store challenge (10 min expiry, 5 attempts, single use)
     const plainOtp = generateSecureOtp();
     const otpHash = hashOtp(plainOtp);
     const expiresAt = dayjs().add(10, 'minute').toDate();
+
 
     const challenge = await prisma.otpChallenge.create({
       data: {
@@ -427,6 +481,7 @@ export class AuthService {
       },
     });
 
+
     // 7. Deliver OTP via email
     await sendOtpEmail({
       toEmail: user.email,
@@ -435,11 +490,13 @@ export class AuthService {
       role: 'Student Registration',
     });
 
+
     const emailParts = user.email.split('@');
     const maskedName = emailParts[0].length > 3
       ? `${emailParts[0].slice(0, 2)}***${emailParts[0].slice(-1)}`
       : `${emailParts[0].slice(0, 1)}***`;
     const maskedEmail = `${maskedName}@${emailParts[1]}`;
+
 
     return {
       challengeId: challenge.id,
@@ -450,6 +507,7 @@ export class AuthService {
     };
   }
 
+
   /**
    * Verifies Registration OTP, marks verified, creates StudentProfile & Enrollment, signs in.
    */
@@ -458,26 +516,32 @@ export class AuthService {
       throw { status: 400, message: 'Invalid or expired verification session.' };
     }
 
+
     const challenge = await prisma.otpChallenge.findUnique({
       where: { id: challengeId },
       include: { user: true },
     });
 
+
     if (!challenge) {
       throw { status: 400, message: 'Invalid verification session. Please register again.' };
     }
+
 
     if (challenge.consumedAt) {
       throw { status: 400, message: 'This verification code has already been used.' };
     }
 
+
     if (dayjs().isAfter(dayjs(challenge.expiresAt))) {
       throw { status: 400, message: 'Verification code has expired. Please request a new code.' };
     }
 
+
     if (challenge.attempts >= 5) {
       throw { status: 429, message: 'Too many incorrect attempts. Please request a fresh verification code.' };
     }
+
 
     const isMatch = verifyOtpHash(otp, challenge.otpHash);
     if (!isMatch) {
@@ -489,17 +553,20 @@ export class AuthService {
       throw { status: 401, message: `Invalid code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.` };
     }
 
+
     // Consume challenge
     await prisma.otpChallenge.update({
       where: { id: challenge.id },
       data: { consumedAt: new Date() },
     });
 
+
     // Mark user verified
     const user = await prisma.user.update({
       where: { id: challenge.userId },
       data: { isEmailVerified: true },
     });
+
 
     // Create StudentProfile & Enrollment
     const branch = user.registrationBranch || null;
@@ -509,8 +576,10 @@ export class AuthService {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const collegeId = `${year}${branchAbbr}${randomSuffix}`;
 
+
     const program = 'B.Tech';
     const yearOfStudy = semester ? Math.min(4, Math.max(1, Math.ceil(semester / 2))) : 1;
+
 
     const studentProfile = await prisma.studentProfile.upsert({
       where: { userId: user.id },
@@ -528,6 +597,7 @@ export class AuthService {
       },
     });
 
+
     await prisma.enrollment.upsert({
       where: { studentEmail: user.email },
       create: {
@@ -542,6 +612,7 @@ export class AuthService {
       },
     });
 
+
     // Auto-create AttendanceSettings
     await prisma.attendanceSettings.upsert({
       where: { studentId: user.id },
@@ -552,11 +623,13 @@ export class AuthService {
       update: {},
     });
 
+
     // Auto-enroll in all subjects matching branch and semester with baseline attendance history if branch & semester exist
     if (branch && semester) {
       const matchingSubjects = await prisma.subject.findMany({
         where: { branch, semester },
       });
+
 
       if (matchingSubjects.length > 0) {
         const today = dayjs().startOf('day');
@@ -582,6 +655,7 @@ export class AuthService {
       }
     }
 
+
     // Sign user in: Generate JWT session token
     const token = jwt.sign(
       {
@@ -594,6 +668,7 @@ export class AuthService {
       { expiresIn: '7d' }
     );
 
+
     const expiresAt = dayjs().add(7, 'day').toDate();
     await prisma.session.create({
       data: {
@@ -605,6 +680,7 @@ export class AuthService {
       },
     });
 
+
     const { passwordHash, ...safeUser } = user;
     return {
       token,
@@ -614,6 +690,7 @@ export class AuthService {
       },
     };
   }
+
 
   /**
    * Invalidates active session on logout.
@@ -629,6 +706,7 @@ export class AuthService {
     }
   }
 
+
   /**
    * Retrieves authenticated user details.
    */
@@ -641,11 +719,14 @@ export class AuthService {
       },
     });
 
+
     if (!user) {
       throw { status: 404, message: 'User not found.' };
     }
+
 
     const { passwordHash, ...safeUser } = user;
     return safeUser;
   }
 }
+
