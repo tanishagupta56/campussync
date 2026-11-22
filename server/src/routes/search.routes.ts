@@ -3,7 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middlewares/auth.middleware';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma as sharedPrisma } from '../db/prisma';
+const prisma = sharedPrisma;
 
 // GET /api/search?q=<query>
 // Returns categorised results across announcements, events, deadlines, opportunities, scholarships, clubs, lost-found

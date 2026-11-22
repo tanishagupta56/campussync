@@ -4,7 +4,8 @@ import { requireAuth } from '../middlewares/auth.middleware';
 import dayjs from 'dayjs';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma as sharedPrisma } from '../db/prisma';
+const prisma = sharedPrisma;
 
 // ---------------------------------------------------------------------------
 // Attendance rules (can be changed on Render without editing code):

@@ -6,7 +6,8 @@ import dayjs from 'dayjs';
 import { config } from '../config/env';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma as sharedPrisma } from '../db/prisma';
+const prisma = sharedPrisma;
 
 // GET /api/config (public)
 router.get('/config', (req, res) => {
@@ -20,9 +21,18 @@ router.get('/config', (req, res) => {
 
 import { ensureFoundationalCurriculum } from '../db/curriculum';
 
+// In-memory cache for the branch/semester list (changes rarely)
+let programsCache: { data: any; expires: number } | null = null;
+const PROGRAMS_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 // GET /api/meta/programs (public)
 router.get('/meta/programs', async (req, res, next) => {
   try {
+    if (programsCache && programsCache.expires > Date.now()) {
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      return res.json({ success: true, data: programsCache.data });
+    }
+
     // If the database has no subjects yet (e.g. freshly deployed to Render/Neon before seed),
     // automatically initialize the foundational university curriculum in the database.
     const subjectCount = await prisma.subject.count();
@@ -52,13 +62,10 @@ router.get('/meta/programs', async (req, res, next) => {
       semesters: b.semesters.sort((a, b) => a - b),
     }));
 
-    res.json({
-      success: true,
-      data: {
-        programs,
-        combinations: subjects,
-      },
-    });
+    const data = { programs, combinations: subjects };
+    programsCache = { data, expires: Date.now() + PROGRAMS_TTL_MS };
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
@@ -165,27 +172,45 @@ router.delete('/announcements/:id', requireAuth, requireRole(Role.ADMINISTRATOR)
   }
 });
 
+// Short cache for the shared public events list (cleared whenever an event is created)
+const eventsCache = new Map<string, { data: any[]; expires: number }>();
+const EVENTS_TTL_MS = 30 * 1000; // 30 seconds
+
+async function getPublicEvents(category: unknown): Promise<any[]> {
+  const key = typeof category === 'string' && category !== 'ALL' ? category : 'ALL';
+  const cached = eventsCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.data;
+
+  const where: any = { isPublic: true };
+  if (key !== 'ALL') where.category = key;
+  const data = await prisma.event.findMany({
+    where,
+    orderBy: { startTime: 'asc' },
+    include: {
+      club: { select: { name: true, category: true } },
+      organizer: { select: { fullName: true, role: true } },
+    },
+  });
+  eventsCache.set(key, { data, expires: Date.now() + EVENTS_TTL_MS });
+  return data;
+}
+
 // GET /api/events
 router.get('/events', requireAuth, async (req, res, next) => {
   try {
     const { category } = req.query;
-    const where: any = { isPublic: true };
-    if (category && typeof category === 'string' && category !== 'ALL') where.category = category;
+    const wantsTimetable =
+      req.user?.role === Role.STUDENT && (!category || category === 'ALL' || category === 'ACADEMIC');
 
-    const events: any[] = await prisma.event.findMany({
-      where,
-      orderBy: { startTime: 'asc' },
-      include: {
-        club: { select: { name: true, category: true } },
-        organizer: { select: { fullName: true, role: true } },
-      },
-    });
+    // Run the two independent database lookups at the same time instead of one after another
+    const [publicEvents, student] = await Promise.all([
+      getPublicEvents(category),
+      wantsTimetable ? prisma.studentProfile.findUnique({ where: { userId: req.user!.id } }) : Promise.resolve(null),
+    ]);
+    const events: any[] = [...publicEvents]; // copy, so the cached list is never modified
 
     // For students: include scheduled academic lectures linked to enrolled subjects
-    if (req.user?.role === Role.STUDENT && (!category || category === 'ALL' || category === 'ACADEMIC')) {
-      const student = await prisma.studentProfile.findUnique({
-        where: { userId: req.user.id },
-      });
+    if (wantsTimetable && req.user) {
       if (student && student.branch && student.semester) {
         const slots = await prisma.timetableSlot.findMany({
           where: {
@@ -249,6 +274,7 @@ router.post('/events', requireAuth, requireRole(Role.ADMINISTRATOR, Role.FACULTY
         isPublic: true,
       },
     });
+    eventsCache.clear();
     res.json({ success: true, data: event });
   } catch (err) {
     next(err);
@@ -937,6 +963,7 @@ router.post('/clubs/:id/events', requireAuth, requireRole(Role.CLUB_CORE, Role.A
       },
     });
 
+    eventsCache.clear();
     res.json({ success: true, data: event });
   } catch (err) {
     next(err);
